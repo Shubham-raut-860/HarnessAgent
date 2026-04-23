@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from harness.core.context import (
@@ -32,6 +35,46 @@ _CHECKPOINT_INTERVAL = 10
 
 # Maximum history messages to keep in context
 _MAX_HISTORY_MESSAGES = 40
+
+# Directory for per-run logs and conversation history (gitignored)
+_LOG_DIR = Path("logs")
+
+
+def _run_log_path(run_id: str) -> Path:
+    """Return path for the per-run JSONL log file."""
+    p = _LOG_DIR / "runs"
+    p.mkdir(parents=True, exist_ok=True)
+    return p / f"{run_id}.jsonl"
+
+
+def _history_path(workspace_path: Path, run_id: str) -> Path:
+    """Return path for the full conversation history saved alongside checkpoint."""
+    return workspace_path / "conversation.jsonl"
+
+
+def _append_run_log(run_id: str, entry: dict) -> None:
+    """Append one JSON line to the per-run log. Never raises."""
+    try:
+        line = json.dumps({**entry, "run_id": run_id,
+                           "ts": datetime.now(timezone.utc).isoformat()},
+                          ensure_ascii=False)
+        with _run_log_path(run_id).open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except Exception as exc:
+        logger.debug("run log write failed: %s", exc)
+
+
+def _save_conversation(workspace_path: Path, run_id: str,
+                       history: list[dict]) -> None:
+    """Write full conversation history to workspace. Never raises."""
+    try:
+        hist_path = _history_path(workspace_path, run_id)
+        with hist_path.open("w", encoding="utf-8") as fh:
+            for turn in history:
+                fh.write(json.dumps({**turn, "run_id": run_id},
+                                    ensure_ascii=False) + "\n")
+    except Exception as exc:
+        logger.debug("conversation save failed: %s", exc)
 
 
 class BaseAgent:
@@ -96,6 +139,16 @@ class BaseAgent:
 
         async with self._mlflow_context(ctx) as mlflow_run_id:
             try:
+                # Log run start locally
+                _append_run_log(ctx.run_id, {
+                    "event": "run_started",
+                    "agent_type": ctx.agent_type,
+                    "tenant_id": ctx.tenant_id,
+                    "task": ctx.task,
+                    "max_steps": ctx.max_steps,
+                    "max_tokens": ctx.max_tokens,
+                })
+
                 # 2. Resume from checkpoint if one exists
                 await self._maybe_resume_checkpoint(ctx)
 
@@ -140,6 +193,19 @@ class BaseAgent:
 
                     # 3i. Emit llm_called event
                     await self._emit_event(StepEvent.llm_called(ctx, response))
+
+                    # Log LLM call locally
+                    _append_run_log(ctx.run_id, {
+                        "event": "llm_call",
+                        "step": ctx.step_count,
+                        "model": response.model,
+                        "provider": response.provider,
+                        "input_tokens": response.input_tokens,
+                        "output_tokens": response.output_tokens,
+                        "cached": response.cached,
+                        "has_tool_calls": bool(response.tool_calls),
+                        "response_preview": response.content[:300] if response.content else "",
+                    })
 
                     # 3j. Safety check on output
                     if self._safety_pipeline is not None:
@@ -216,6 +282,17 @@ class BaseAgent:
 
                         # Emit tool_called step event
                         await self._emit_event(StepEvent.tool_called(ctx, call, result))
+
+                        # Log tool call locally
+                        _append_run_log(ctx.run_id, {
+                            "event": "tool_call",
+                            "step": ctx.step_count,
+                            "tool": call.name,
+                            "args": call.args,
+                            "success": not result.is_error,
+                            "error": result.error,
+                            "result_preview": str(result.data)[:300] if result.data else "",
+                        })
 
                         # Audit log
                         await self._audit(ctx, call, result)
@@ -298,6 +375,24 @@ class BaseAgent:
                 await self._emit_event(StepEvent.failed(ctx, str(exc)))
 
             finally:
+                # Save full conversation history to disk (gitignored, local only)
+                if history:
+                    _save_conversation(ctx.workspace_path, ctx.run_id, history)
+
+                # Log run completion locally
+                elapsed = time.monotonic() - run_start
+                _append_run_log(ctx.run_id, {
+                    "event": "run_finished",
+                    "agent_type": ctx.agent_type,
+                    "success": not ctx.failed,
+                    "failure_class": ctx.failure_class,
+                    "total_steps": ctx.step_count,
+                    "total_tokens": ctx.token_count,
+                    "total_cost_usd": total_cost_usd,
+                    "elapsed_seconds": round(elapsed, 2),
+                    "output_preview": output[:300] if output else "",
+                })
+
                 # 8. Decrement active_runs gauge
                 if metrics is not None:
                     try:

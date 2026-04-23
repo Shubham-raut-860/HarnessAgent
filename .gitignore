@@ -32,8 +32,10 @@ env/
 .DS_Store
 Thumbs.db
 
-# Project runtime
+# Project runtime — local only, never pushed
 /workspaces/
+/logs/
+/runs/
 *.db
 *.sqlite
 *.sqlite3
@@ -45,14 +47,16 @@ poetry.lock
 # Docker volumes (generated)
 data/
 
-# MLflow artifacts
+# MLflow artifacts — local only
 mlruns/
 mlflow.db
 artifacts/
 
-# Logs
+# Log files — local only
 *.log
+*.jsonl
 logs/
+run_logs/
 
 # Models (large binary files)
 models/*.gguf

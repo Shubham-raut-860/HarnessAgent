@@ -153,34 +153,67 @@ class ExecuteQueryTool:
         if sql.upper().lstrip().startswith("SELECT") and not _LIMIT_RE.search(sql):
             sql = _add_limit(sql, limit)
 
+        import time as _time
+        table_names = _extract_table_names(sql)
+        t0 = _time.monotonic()
+        error_message: str | None = None
+
         try:
             rows = await self._pool.execute_query(sql)
             if len(rows) > limit:
                 rows = rows[:limit]
+            latency_ms = (_time.monotonic() - t0) * 1000
 
-            # Update graph memory with table usage if memory is available
+            # Record successful query in the knowledge graph
             if ctx.memory is not None:
                 try:
-                    # Extract table names from SQL for graph memory annotation
-                    table_names = _extract_table_names(sql)
-                    for table_name in table_names:
-                        if hasattr(ctx.memory, "graph") and ctx.memory.graph is not None:
-                            await ctx.memory.graph.add_node(
-                                id=f"table:{table_name}",
-                                type="Table",
-                                props={"name": table_name, "accessed_by": ctx.run_id},
+                    graph_rag = getattr(ctx.memory, "_graph_rag", None)
+                    if graph_rag is not None:
+                        await graph_rag.record_query(
+                            query_sql=sql,
+                            tables_used=table_names,
+                            run_id=ctx.run_id,
+                            tenant_id=ctx.tenant_id,
+                            success=True,
+                            latency_ms=latency_ms,
+                        )
+                    else:
+                        # Fallback: add simple graph facts
+                        for table_name in table_names:
+                            await ctx.memory.add_fact(
+                                f"query:{ctx.run_id}", "uses", f"table:{table_name}"
                             )
                 except Exception as mem_exc:
-                    logger.debug("Graph memory update failed: %s", mem_exc)
+                    logger.debug("Graph record_query failed: %s", mem_exc)
 
             return ToolResult(
                 data=rows,
-                metadata={"row_count": len(rows), "sql": sql},
+                metadata={"row_count": len(rows), "sql": sql, "latency_ms": round(latency_ms, 1)},
             )
         except ToolError:
             raise
         except Exception as exc:
+            error_message = str(exc)
+            latency_ms = (_time.monotonic() - t0) * 1000
             logger.exception("SQL execution failed: %s", exc)
+
+            # Record failed query in graph so future retrievals surface the error pattern
+            if ctx.memory is not None:
+                try:
+                    graph_rag = getattr(ctx.memory, "_graph_rag", None)
+                    if graph_rag is not None:
+                        await graph_rag.record_query(
+                            query_sql=sql,
+                            tables_used=table_names,
+                            run_id=ctx.run_id,
+                            tenant_id=ctx.tenant_id,
+                            success=False,
+                            error_message=error_message,
+                            latency_ms=latency_ms,
+                        )
+                except Exception:
+                    pass
+
             return ToolResult(
                 data=None,
                 error=f"Query execution failed: {exc}",
