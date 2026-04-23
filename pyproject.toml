@@ -1,0 +1,97 @@
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "codex-harness"
+version = "0.1.0"
+description = "Production-grade multi-agent harness with LLM routing, memory, tools, and observability"
+authors = ["Codex Team"]
+readme = "README.md"
+packages = [{include = "harness", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = ">=0.115.0"
+uvicorn = {extras = ["standard"], version = ">=0.30.0"}
+pydantic = ">=2.9.0"
+pydantic-settings = ">=2.6.0"
+httpx = ">=0.28.0"
+anthropic = ">=0.40.0"
+openai = ">=1.50.0"
+instructor = ">=1.6.0"
+tiktoken = ">=0.8.0"
+chromadb = ">=0.5.0"
+qdrant-client = ">=1.11.0"
+weaviate-client = ">=4.9.0"
+networkx = ">=3.3"
+neo4j = ">=5.27.0"
+redis = ">=5.2.0"
+sentence-transformers = ">=3.3.0"
+mlflow = ">=2.18.0"
+opentelemetry-api = ">=1.27.0"
+opentelemetry-sdk = ">=1.27.0"
+opentelemetry-exporter-otlp = ">=1.27.0"
+prometheus-client = ">=0.21.0"
+mcp = ">=1.2.0"
+sqlalchemy = {extras = ["asyncio"], version = ">=2.0.0"}
+asyncpg = ">=0.30.0"
+aiosqlite = ">=0.20.0"
+jsonschema = ">=4.23.0"
+pymupdf = ">=1.24.0"
+trafilatura = ">=1.12.0"
+python-docx = ">=1.1.0"
+rq = ">=2.0.0"
+structlog = ">=24.4.0"
+python-jose = {extras = ["cryptography"], version = ">=3.3.0"}
+passlib = {extras = ["bcrypt"], version = ">=1.7.4"}
+apscheduler = ">=3.10.0"
+aiofiles = ">=24.1.0"
+python-multipart = ">=0.0.12"
+sse-starlette = ">=2.1.0"
+guardrail = {path = "../Guardrail", develop = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3.0"
+pytest-asyncio = ">=0.24.0"
+pytest-cov = ">=6.0.0"
+pytest-mock = ">=3.14.0"
+fakeredis = ">=2.26.0"
+respx = ">=0.21.0"
+factory-boy = ">=3.3.0"
+freezegun = ">=1.5.0"
+ruff = ">=0.8.0"
+mypy = ">=1.13.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["--tb=short", "-q"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "PTH", "RUF"]
+ignore = ["E501", "B008", "N818"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["harness"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.coverage.run]
+source = ["src/harness"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

@@ -1,0 +1,77 @@
+# =============================================================================
+# Codex Harness — MCP Server Configurations
+# Each entry defines one MCP server the harness can connect to at startup.
+# ${ENV_VAR} tokens are expanded from the environment at load time.
+# =============================================================================
+
+mcp_servers:
+
+  # ---------------------------------------------------------------------------
+  # filesystem — read / write local files via the official MCP filesystem server
+  # Transport: stdio (subprocess)
+  # ---------------------------------------------------------------------------
+  - name: filesystem
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "${WORKSPACE_BASE_PATH:-/workspaces}"
+    env: {}
+    enabled: true
+    description: "Provides file read/write/list tools scoped to the agent workspace."
+
+  # ---------------------------------------------------------------------------
+  # postgres — query a PostgreSQL database via MCP
+  # Transport: stdio (subprocess)
+  # ---------------------------------------------------------------------------
+  - name: postgres
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-postgres"
+    env:
+      DATABASE_URL: "${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/codex}"
+    enabled: true
+    description: "Exposes PostgreSQL query tools; DATABASE_URL must be set."
+
+  # ---------------------------------------------------------------------------
+  # brave_search — web search via Brave Search API
+  # Transport: stdio (subprocess)
+  # ---------------------------------------------------------------------------
+  - name: brave_search
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-brave-search"
+    env:
+      BRAVE_API_KEY: "${BRAVE_API_KEY}"
+    enabled: true
+    description: "Provides web search via the Brave Search API (requires BRAVE_API_KEY)."
+
+  # ---------------------------------------------------------------------------
+  # custom_api — arbitrary HTTP/SSE-based MCP server
+  # Transport: sse (Server-Sent Events over HTTP)
+  # ---------------------------------------------------------------------------
+  - name: custom_api
+    transport: sse
+    url: "${CUSTOM_MCP_URL:-http://localhost:9000/mcp/sse}"
+    headers:
+      Authorization: "Bearer ${CUSTOM_MCP_TOKEN:-}"
+      Content-Type: "application/json"
+    env: {}
+    enabled: false
+    description: "Connects to a custom HTTP/SSE MCP server; set CUSTOM_MCP_URL and CUSTOM_MCP_TOKEN."
+
+# ---------------------------------------------------------------------------
+# Global MCP connection settings
+# ---------------------------------------------------------------------------
+connection:
+  # Seconds to wait for a server to start / respond before failing
+  connect_timeout_seconds: 10.0
+  # Maximum number of reconnect attempts on connection loss
+  max_reconnect_attempts: 3
+  # Backoff multiplier between reconnect attempts
+  reconnect_backoff_seconds: 2.0

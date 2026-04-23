@@ -1,0 +1,195 @@
+# =============================================================================
+# Codex Harness — Model Provider Capabilities Configuration
+# ${ENV_VAR} tokens are expanded at load time from the environment.
+# =============================================================================
+
+providers:
+
+  # ---------------------------------------------------------------------------
+  # Anthropic Claude (cloud)
+  # ---------------------------------------------------------------------------
+  - name: claude
+    type: anthropic
+    api_key: ${ANTHROPIC_API_KEY}
+    models:
+      - id: claude-sonnet-4-6
+        priority: 0
+        context_window: 200000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 3.0
+        cost_per_m_output_usd: 15.0
+
+      - id: claude-haiku-4-5
+        priority: 1
+        context_window: 200000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 0.25
+        cost_per_m_output_usd: 1.25
+
+      - id: claude-opus-4-7
+        priority: 2
+        context_window: 200000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 15.0
+        cost_per_m_output_usd: 75.0
+
+  # ---------------------------------------------------------------------------
+  # OpenAI (cloud) — GPT-4o, GPT-4o-mini, o-series, GPT-5
+  # ---------------------------------------------------------------------------
+  - name: openai
+    type: openai
+    api_key: ${OPENAI_API_KEY}
+    models:
+      - id: gpt-4o-mini
+        priority: 3
+        context_window: 128000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true        # auto-caching on repeated prefixes
+        cost_per_m_input_usd: 0.15
+        cost_per_m_output_usd: 0.60
+
+      - id: gpt-4o
+        priority: 4
+        context_window: 128000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 2.50
+        cost_per_m_output_usd: 10.0
+
+      - id: gpt-5
+        priority: 5
+        context_window: 128000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 2.50
+        cost_per_m_output_usd: 10.0
+
+      - id: gpt-5-mini
+        priority: 5
+        context_window: 128000
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 0.40
+        cost_per_m_output_usd: 1.60
+
+      # o-series reasoning models (no system prompt, max_completion_tokens)
+      - id: o4-mini
+        priority: 6
+        context_window: 128000
+        supports_tool_calling: false        # reasoning models skip tool calling
+        supports_system_prompt: false       # uses developer role instead
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 1.10
+        cost_per_m_output_usd: 4.40
+
+      - id: o3-mini
+        priority: 7
+        context_window: 128000
+        supports_tool_calling: false
+        supports_system_prompt: false
+        supports_vision: false
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 1.10
+        cost_per_m_output_usd: 4.40
+
+      - id: o3
+        priority: 8
+        context_window: 128000
+        supports_tool_calling: false
+        supports_system_prompt: false
+        supports_vision: true
+        supports_prompt_caching: true
+        cost_per_m_input_usd: 10.0
+        cost_per_m_output_usd: 40.0
+
+  # ---------------------------------------------------------------------------
+  # vLLM — Mistral-7B (self-hosted)
+  # ---------------------------------------------------------------------------
+  - name: vllm_mistral
+    type: openai_compat
+    base_url: ${VLLM_BASE_URL:-http://localhost:8000}
+    api_key: not-required
+    models:
+      - id: mistralai/Mistral-7B-Instruct-v0.3
+        priority: 10
+        context_window: 32768
+        supports_tool_calling: true
+        supports_system_prompt: true
+        supports_vision: false
+        supports_prompt_caching: false
+        cost_per_m_input_usd: 0.0
+        cost_per_m_output_usd: 0.0
+
+  # ---------------------------------------------------------------------------
+  # SGLang — LLaMA-3 8B (self-hosted)
+  # ---------------------------------------------------------------------------
+  - name: sglang_llama3
+    type: openai_compat
+    base_url: ${SGLANG_BASE_URL:-http://localhost:8001}
+    api_key: not-required
+    models:
+      - id: meta-llama/Meta-Llama-3-8B-Instruct
+        priority: 11
+        context_window: 8192
+        supports_tool_calling: false
+        supports_system_prompt: true
+        supports_vision: false
+        supports_prompt_caching: false
+        cost_per_m_input_usd: 0.0
+        cost_per_m_output_usd: 0.0
+
+  # ---------------------------------------------------------------------------
+  # llama.cpp HTTP server (local, CPU)
+  # ---------------------------------------------------------------------------
+  - name: llamacpp
+    type: openai_compat
+    base_url: ${LLAMACPP_BASE_URL:-http://localhost:8002}
+    api_key: not-required
+    models:
+      - id: local-model
+        priority: 20
+        context_window: 4096
+        supports_tool_calling: false
+        supports_system_prompt: false
+        supports_vision: false
+        supports_prompt_caching: false
+        cost_per_m_input_usd: 0.0
+        cost_per_m_output_usd: 0.0
+
+# ---------------------------------------------------------------------------
+# Circuit breaker defaults (applied per-provider)
+# ---------------------------------------------------------------------------
+circuit_breaker:
+  failure_threshold: 5
+  recovery_timeout_seconds: 60.0
+  success_threshold: 2
+
+# ---------------------------------------------------------------------------
+# Router defaults
+# ---------------------------------------------------------------------------
+router:
+  # Automatically fall back to next provider on these failure classes:
+  retryable_failure_classes:
+    - LLM_RATE_LIMIT
+    - LLM_TIMEOUT
+    - LLM_ERROR
+  # Health check interval in seconds
+  health_check_interval_seconds: 30

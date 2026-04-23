@@ -1,0 +1,289 @@
+"""Scheduler: execute a TaskPlan with parallel execution of independent tasks."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import uuid
+from typing import Any
+
+from harness.core.context import AgentResult
+from harness.orchestrator.planner import SubTask, TaskPlan
+
+logger = logging.getLogger(__name__)
+
+
+class Scheduler:
+    """Execute a TaskPlan with maximal parallelism.
+
+    Independent tasks (no dependency relationship) are executed concurrently
+    with asyncio.gather(). As tasks complete their results are passed to
+    dependents via metadata.
+    """
+
+    def __init__(
+        self,
+        agent_runner: Any,
+        message_bus: Any | None = None,
+    ) -> None:
+        """
+        Args:
+            agent_runner: An AgentRunner (or compatible) instance.
+                          Must expose create_run() and execute_run().
+            message_bus:  Optional AgentMessageBus for broadcasting plan events.
+        """
+        self._runner = agent_runner
+        self._message_bus = message_bus
+
+    async def execute_plan(
+        self,
+        plan: TaskPlan,
+        tenant_id: str,
+        timeout: float = 300.0,
+    ) -> dict[str, AgentResult]:
+        """Execute a TaskPlan and return results keyed by SubTask.id.
+
+        Algorithm:
+        1. Validate the DAG and compute topological order.
+        2. Maintain a set of completed task ids and their results.
+        3. In each iteration, find all tasks ready to run (deps satisfied),
+           execute them in parallel with asyncio.gather, then add to completed.
+        4. Repeat until all tasks are done or timeout.
+
+        Args:
+            plan:      The TaskPlan to execute.
+            tenant_id: The tenant executing this plan.
+            timeout:   Total wall-clock timeout for the entire plan (seconds).
+
+        Returns:
+            Dict mapping subtask_id to AgentResult.
+        """
+        errors = plan.validate()
+        if errors:
+            raise ValueError(f"Cannot execute invalid plan: {errors}")
+
+        completed_ids: set[str] = set()
+        results: dict[str, Any] = {}
+        all_ids = {st.id for st in plan.subtasks}
+
+        logger.info(
+            "Starting plan %s execution: %d tasks, tenant=%s",
+            plan.plan_id,
+            len(plan.subtasks),
+            tenant_id,
+        )
+        await self._publish("plan_started", plan.plan_id, {"total_tasks": len(plan.subtasks)})
+
+        try:
+            async with asyncio.timeout(timeout):
+                while completed_ids != all_ids:
+                    ready = plan.get_ready_tasks(completed_ids)
+
+                    if not ready:
+                        # This should not happen if the plan is valid and not fully done
+                        remaining = [st.id for st in plan.subtasks if st.id not in completed_ids]
+                        logger.error(
+                            "Plan %s deadlocked: no ready tasks, remaining=%s",
+                            plan.plan_id,
+                            remaining,
+                        )
+                        raise RuntimeError(
+                            f"Plan deadlock: no tasks ready to execute. "
+                            f"Remaining: {remaining}"
+                        )
+
+                    logger.info(
+                        "Plan %s: executing %d tasks in parallel: %s",
+                        plan.plan_id,
+                        len(ready),
+                        [st.id for st in ready],
+                    )
+
+                    # Execute all ready tasks concurrently
+                    batch_results = await asyncio.gather(
+                        *[
+                            self._execute_subtask(st, tenant_id, results)
+                            for st in ready
+                        ],
+                        return_exceptions=True,
+                    )
+
+                    for st, result in zip(ready, batch_results):
+                        if isinstance(result, Exception):
+                            logger.error(
+                                "Plan %s sub-task '%s' failed: %s",
+                                plan.plan_id,
+                                st.id,
+                                result,
+                            )
+                            # Create a failed AgentResult
+                            from harness.core.context import AgentResult
+                            results[st.id] = AgentResult(
+                                run_id=f"failed_{st.id}",
+                                output="",
+                                steps=0,
+                                tokens=0,
+                                success=False,
+                                failure_class="UNKNOWN",
+                                error_message=str(result),
+                            )
+                        else:
+                            results[st.id] = result
+
+                        completed_ids.add(st.id)
+                        await self._publish(
+                            "subtask_completed",
+                            plan.plan_id,
+                            {
+                                "subtask_id": st.id,
+                                "success": (
+                                    results[st.id].success
+                                    if hasattr(results[st.id], "success")
+                                    else False
+                                ),
+                            },
+                        )
+
+        except asyncio.TimeoutError:
+            logger.error("Plan %s timed out after %.1f seconds", plan.plan_id, timeout)
+            # Return partial results for completed tasks
+            await self._publish(
+                "plan_timeout", plan.plan_id, {"completed": list(completed_ids)}
+            )
+            raise
+
+        logger.info(
+            "Plan %s completed: %d/%d tasks succeeded",
+            plan.plan_id,
+            sum(1 for r in results.values() if getattr(r, "success", False)),
+            len(results),
+        )
+        await self._publish(
+            "plan_completed",
+            plan.plan_id,
+            {"total": len(results), "succeeded": sum(1 for r in results.values() if getattr(r, "success", False))},
+        )
+
+        return results
+
+    async def _execute_subtask(
+        self,
+        subtask: SubTask,
+        tenant_id: str,
+        predecessor_results: dict[str, Any],
+    ) -> Any:
+        """Execute a single SubTask, enriching its context with predecessor outputs.
+
+        Args:
+            subtask:            The sub-task to run.
+            tenant_id:          Owning tenant.
+            predecessor_results: Results from previously completed tasks.
+
+        Returns:
+            AgentResult for this subtask.
+        """
+        # Build enriched task description with predecessor outputs
+        task_with_context = _build_task_with_context(subtask, predecessor_results)
+
+        # Build metadata for this run
+        metadata: dict[str, Any] = dict(subtask.metadata)
+        metadata["plan_subtask_id"] = subtask.id
+        metadata["depends_on"] = subtask.depends_on
+
+        # Include predecessor result summaries
+        for dep_id in subtask.depends_on:
+            dep_result = predecessor_results.get(dep_id)
+            if dep_result is not None:
+                metadata[f"predecessor_{dep_id}_output"] = _summarise_result(dep_result)
+
+        logger.info(
+            "Executing sub-task '%s' (agent_type=%s)", subtask.id, subtask.agent_type
+        )
+
+        try:
+            record = await self._runner.create_run(
+                tenant_id=tenant_id,
+                agent_type=subtask.agent_type,
+                task=task_with_context,
+                metadata=metadata,
+            )
+            updated_record = await self._runner.execute_run(record.run_id)
+
+            # Extract AgentResult from the record
+            result_data = updated_record.result or {}
+            from harness.core.context import AgentResult
+
+            return AgentResult(
+                run_id=result_data.get("run_id", record.run_id),
+                output=result_data.get("output", ""),
+                steps=result_data.get("steps", 0),
+                tokens=result_data.get("tokens", 0),
+                success=result_data.get("success", updated_record.status == "completed"),
+                failure_class=result_data.get("failure_class"),
+                error_message=result_data.get("error_message"),
+                elapsed_seconds=result_data.get("elapsed_seconds", 0.0),
+                cost_usd=result_data.get("cost_usd", 0.0),
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Sub-task '%s' execution raised: %s", subtask.id, exc
+            )
+            raise
+
+    async def _publish(
+        self, event_type: str, plan_id: str, payload: dict[str, Any]
+    ) -> None:
+        """Publish a plan-level event to the message bus."""
+        if self._message_bus is None:
+            return
+        try:
+            from datetime import datetime, timezone
+            from harness.core.context import StepEvent
+
+            event = StepEvent(
+                run_id=f"plan:{plan_id}",
+                step=0,
+                event_type=event_type,
+                payload={"plan_id": plan_id, **payload},
+                timestamp=datetime.now(timezone.utc),
+            )
+            result = self._message_bus.publish(event)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:
+            logger.debug("Scheduler._publish failed: %s", exc)
+
+
+def _build_task_with_context(
+    subtask: SubTask, predecessor_results: dict[str, Any]
+) -> str:
+    """Enrich a sub-task description with predecessor outputs."""
+    task = subtask.task
+    if not subtask.depends_on:
+        return task
+
+    context_parts: list[str] = []
+    for dep_id in subtask.depends_on:
+        dep_result = predecessor_results.get(dep_id)
+        if dep_result is None:
+            continue
+        output = _summarise_result(dep_result)
+        if output:
+            context_parts.append(f"[Output from {dep_id}]: {output}")
+
+    if context_parts:
+        context_str = "\n".join(context_parts)
+        task = f"{task}\n\nContext from prerequisite tasks:\n{context_str}"
+
+    return task
+
+
+def _summarise_result(result: Any, max_chars: int = 2000) -> str:
+    """Extract a short textual summary from an AgentResult."""
+    output = getattr(result, "output", "")
+    if not output and isinstance(result, dict):
+        output = result.get("output", "")
+    if len(output) > max_chars:
+        output = output[:max_chars] + "... [truncated]"
+    return output

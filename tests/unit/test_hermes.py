@@ -1,0 +1,181 @@
+"""Unit tests for the Hermes self-improvement loop."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from harness.improvement.error_collector import ErrorRecord
+from harness.improvement.evaluator import EvalResult
+from harness.improvement.hermes import HermesLoop, PatchOutcome
+from harness.improvement.patch_generator import Patch
+
+
+def _make_error(agent_type="sql"):
+    return ErrorRecord(
+        record_id=uuid.uuid4().hex,
+        agent_type=agent_type,
+        task="List all tables",
+        failure_class="LLM_PARSE_ERROR",
+        error_message="JSON parse failed",
+        stack_trace="",
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def _make_patch(agent_type="sql"):
+    return Patch(
+        patch_id=uuid.uuid4().hex,
+        agent_type=agent_type,
+        target="system_prompt",
+        op="append",
+        path="",
+        value="Always validate SQL before execution.",
+        rationale="Reduces parse errors.",
+        status="pending",
+    )
+
+
+def _make_config(auto_apply=False, threshold=0.7, min_errors=5):
+    cfg = MagicMock()
+    cfg.hermes_auto_apply = auto_apply
+    cfg.hermes_patch_score_threshold = threshold
+    cfg.hermes_min_errors_to_trigger = min_errors
+    cfg.hermes_interval_seconds = 3600.0
+    return cfg
+
+
+def _make_hermes(collector=None, generator=None, evaluator=None,
+                 prompt_store=None, config=None):
+    collector = collector or AsyncMock()
+    generator = generator or AsyncMock()
+    evaluator = evaluator or AsyncMock()
+    prompt_store = prompt_store or AsyncMock()
+    config = config or _make_config()
+    metrics = MagicMock()
+    return HermesLoop(
+        collector=collector, generator=generator, evaluator=evaluator,
+        prompt_store=prompt_store, metrics=metrics, config=config,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_when_too_few_errors():
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=2)
+    hermes = _make_hermes(collector=collector, config=_make_config(min_errors=5))
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is None
+
+
+@pytest.mark.asyncio
+async def test_cycle_generates_patch_from_errors():
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(score=0.8, test_cases=10, successes=8))
+    hermes = _make_hermes(collector=collector, generator=generator,
+                          evaluator=evaluator, config=_make_config(auto_apply=False))
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is not None
+    assert generator.generate.called
+
+
+@pytest.mark.asyncio
+async def test_cycle_applies_patch_when_auto_apply_true():
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+    prompt_store = AsyncMock()
+    prompt_store.apply_patch = AsyncMock(return_value=MagicMock())
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(score=0.9, test_cases=10, successes=9))
+    hermes = _make_hermes(collector=collector, generator=generator, evaluator=evaluator,
+                          prompt_store=prompt_store, config=_make_config(auto_apply=True, threshold=0.7))
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is not None
+    assert outcome.applied is True
+    prompt_store.apply_patch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cycle_queues_patch_when_auto_apply_false():
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+    prompt_store = AsyncMock()
+    prompt_store.apply_patch = AsyncMock()
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(score=0.9))
+    hermes = _make_hermes(collector=collector, generator=generator, evaluator=evaluator,
+                          prompt_store=prompt_store, config=_make_config(auto_apply=False))
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is not None
+    assert outcome.applied is False
+    prompt_store.apply_patch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cycle_rejects_patch_when_score_below_threshold():
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+    prompt_store = AsyncMock()
+    prompt_store.apply_patch = AsyncMock()
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(score=0.3))
+    hermes = _make_hermes(collector=collector, generator=generator, evaluator=evaluator,
+                          prompt_store=prompt_store, config=_make_config(auto_apply=True, threshold=0.7))
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is not None
+    assert outcome.applied is False
+    prompt_store.apply_patch.assert_not_called()
+
+
+def test_evaluator_scores_patch_correctly():
+    result = EvalResult(
+        patch_id="p1", test_cases=10, successes=8, failures=2,
+        avg_steps_delta=2.0, avg_tokens_delta=100.0,
+    )
+    # score = 0.8 - 0.01*2 - 0.001*100 = 0.68
+    assert abs(result.score - 0.68) < 0.01
+
+
+@pytest.mark.asyncio
+async def test_patch_generator_returns_valid_patch_json():
+    from harness.improvement.patch_generator import PatchGenerator
+
+    errors = [_make_error()]
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value=MagicMock(
+        content='{"op":"append","path":"","value":"Validate SQL first.","rationale":"reduce errors"}'
+    ))
+    mock_prompt_manager = AsyncMock()
+    mock_prompt_manager.get_prompt = AsyncMock(return_value="Current prompt")
+
+    generator = PatchGenerator(llm_provider=mock_llm, prompt_manager=mock_prompt_manager)
+    patch = await generator.generate(agent_type="sql", errors=errors)
+
+    assert isinstance(patch, Patch)
+    assert patch.agent_type == "sql"
+    assert patch.op in ("append", "replace", "remove", "add_example")

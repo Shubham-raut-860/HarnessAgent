@@ -1,0 +1,446 @@
+"""Production SQL tools for Codex Harness agents.
+
+All tools are read-only by default. Connection pool is shared across tool instances.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass, field
+from typing import Any
+
+from harness.core.context import AgentContext, ToolResult
+from harness.core.errors import FailureClass, ToolError
+
+logger = logging.getLogger(__name__)
+
+# Regex to detect non-SELECT DML/DDL statements
+_WRITE_STMT_RE = re.compile(
+    r"^\s*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|REPLACE|MERGE|CALL|EXEC|EXECUTE)\b",
+    re.IGNORECASE,
+)
+
+# Regex to detect absence of LIMIT clause
+_LIMIT_RE = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
+
+
+@dataclass
+class SQLConnectionConfig:
+    """Configuration for an async SQL database connection."""
+
+    connection_string: str  # SQLAlchemy async URL e.g. "postgresql+asyncpg://..."
+    read_only: bool = True
+    max_rows: int = 1000
+    query_timeout: float = 30.0
+
+
+class _SharedPool:
+    """Lazily initialised async SQLAlchemy engine shared across tools."""
+
+    def __init__(self, config: SQLConnectionConfig) -> None:
+        self._config = config
+        self._engine: Any = None
+
+    async def get_engine(self) -> Any:
+        """Return or create the async SQLAlchemy engine."""
+        if self._engine is None:
+            try:
+                from sqlalchemy.ext.asyncio import create_async_engine
+
+                connect_args: dict[str, Any] = {}
+                if self._config.query_timeout:
+                    connect_args["command_timeout"] = self._config.query_timeout
+
+                self._engine = create_async_engine(
+                    self._config.connection_string,
+                    pool_size=5,
+                    max_overflow=10,
+                    pool_pre_ping=True,
+                    connect_args=connect_args,
+                )
+                logger.info("Created async SQL engine for %s", self._config.connection_string.split("@")[-1])
+            except Exception as exc:
+                raise ToolError(
+                    f"Failed to create database engine: {exc}",
+                    tool_name="sql_pool",
+                    failure_class=FailureClass.TOOL_EXEC_ERROR,
+                    context={"error": str(exc)},
+                ) from exc
+        return self._engine
+
+    async def execute_query(
+        self, sql: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """Execute a SQL query and return rows as a list of dicts."""
+        import sqlalchemy
+
+        engine = await self.get_engine()
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                sqlalchemy.text(sql), params or {}
+            )
+            if result.returns_rows:
+                keys = list(result.keys())
+                rows = [dict(zip(keys, row)) for row in result.fetchall()]
+                return rows
+            return []
+
+    async def close(self) -> None:
+        """Dispose the engine and its connection pool."""
+        if self._engine is not None:
+            await self._engine.dispose()
+            self._engine = None
+
+
+def _add_limit(sql: str, limit: int) -> str:
+    """Append a LIMIT clause if one is not already present."""
+    if not _LIMIT_RE.search(sql):
+        return f"{sql.rstrip(';')} LIMIT {limit}"
+    return sql
+
+
+def _is_sqlite(connection_string: str) -> bool:
+    return "sqlite" in connection_string.lower()
+
+
+def _is_postgres(connection_string: str) -> bool:
+    return "postgres" in connection_string.lower() or "pg" in connection_string.lower()
+
+
+class ExecuteQueryTool:
+    """Execute a SQL SELECT query against the configured database."""
+
+    name = "execute_sql"
+    description = (
+        "Execute a SQL query against the database. "
+        "Returns results as a list of dicts. "
+        "Only SELECT queries are allowed in read-only mode."
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "sql": {"type": "string", "description": "The SQL query to execute."},
+            "limit": {
+                "type": "integer",
+                "default": 100,
+                "maximum": 1000,
+                "description": "Maximum number of rows to return.",
+            },
+        },
+        "required": ["sql"],
+    }
+    timeout_seconds: float = 30.0
+
+    def __init__(self, pool: _SharedPool, config: SQLConnectionConfig) -> None:
+        self._pool = pool
+        self._config = config
+
+    async def execute(self, ctx: AgentContext, args: dict[str, Any]) -> ToolResult:
+        """Execute the SQL query and return rows as a list of dicts."""
+        sql: str = args["sql"].strip()
+        limit: int = min(int(args.get("limit", 100)), self._config.max_rows)
+
+        # Reject non-SELECT in read-only mode
+        if self._config.read_only and _WRITE_STMT_RE.match(sql):
+            error = (
+                "Only SELECT queries are permitted in read-only mode. "
+                f"Received: {sql[:80]!r}"
+            )
+            return ToolResult(data=None, error=error)
+
+        # Add LIMIT if missing on SELECT
+        if sql.upper().lstrip().startswith("SELECT") and not _LIMIT_RE.search(sql):
+            sql = _add_limit(sql, limit)
+
+        try:
+            rows = await self._pool.execute_query(sql)
+            if len(rows) > limit:
+                rows = rows[:limit]
+
+            # Update graph memory with table usage if memory is available
+            if ctx.memory is not None:
+                try:
+                    # Extract table names from SQL for graph memory annotation
+                    table_names = _extract_table_names(sql)
+                    for table_name in table_names:
+                        if hasattr(ctx.memory, "graph") and ctx.memory.graph is not None:
+                            await ctx.memory.graph.add_node(
+                                id=f"table:{table_name}",
+                                type="Table",
+                                props={"name": table_name, "accessed_by": ctx.run_id},
+                            )
+                except Exception as mem_exc:
+                    logger.debug("Graph memory update failed: %s", mem_exc)
+
+            return ToolResult(
+                data=rows,
+                metadata={"row_count": len(rows), "sql": sql},
+            )
+        except ToolError:
+            raise
+        except Exception as exc:
+            logger.exception("SQL execution failed: %s", exc)
+            return ToolResult(
+                data=None,
+                error=f"Query execution failed: {exc}",
+            )
+
+
+class ListTablesTool:
+    """List all tables in the database with their names and optional descriptions."""
+
+    name = "list_tables"
+    description = (
+        "List all tables (and views) in the database with their row counts."
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "schema": {
+                "type": "string",
+                "description": "Database schema name (default: public for Postgres).",
+            }
+        },
+        "required": [],
+    }
+    timeout_seconds: float = 15.0
+
+    def __init__(self, pool: _SharedPool, config: SQLConnectionConfig) -> None:
+        self._pool = pool
+        self._config = config
+
+    async def execute(self, ctx: AgentContext, args: dict[str, Any]) -> ToolResult:
+        """Query information_schema to list all tables."""
+        schema = args.get("schema", "public")
+
+        if _is_sqlite(self._config.connection_string):
+            sql = (
+                "SELECT name AS table_name, 'table' AS table_type "
+                "FROM sqlite_master WHERE type IN ('table','view') "
+                "ORDER BY name"
+            )
+        else:
+            sql = (
+                "SELECT table_name, table_type, table_schema "
+                f"FROM information_schema.tables "
+                f"WHERE table_schema = '{schema}' "
+                "ORDER BY table_name"
+            )
+
+        try:
+            rows = await self._pool.execute_query(sql)
+            return ToolResult(
+                data=rows,
+                metadata={"table_count": len(rows), "schema": schema},
+            )
+        except Exception as exc:
+            logger.exception("list_tables failed: %s", exc)
+            return ToolResult(data=None, error=f"list_tables failed: {exc}")
+
+
+class DescribeTableTool:
+    """Show columns, types, constraints, and sample count for a table."""
+
+    name = "describe_table"
+    description = (
+        "Show columns, data types, constraints, and approximate row count "
+        "for a specific table."
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "table_name": {
+                "type": "string",
+                "description": "Name of the table to describe.",
+            },
+            "schema": {
+                "type": "string",
+                "description": "Database schema (default: public).",
+            },
+        },
+        "required": ["table_name"],
+    }
+    timeout_seconds: float = 15.0
+
+    def __init__(self, pool: _SharedPool, config: SQLConnectionConfig) -> None:
+        self._pool = pool
+        self._config = config
+
+    async def execute(self, ctx: AgentContext, args: dict[str, Any]) -> ToolResult:
+        """Query information_schema for column metadata."""
+        table_name = args["table_name"].strip()
+        schema = args.get("schema", "public")
+
+        # Sanitize table_name to prevent injection
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+            return ToolResult(
+                data=None,
+                error=f"Invalid table name: {table_name!r}",
+            )
+
+        try:
+            if _is_sqlite(self._config.connection_string):
+                # Use PRAGMA for SQLite
+                columns_sql = f"PRAGMA table_info({table_name})"
+                columns = await self._pool.execute_query(columns_sql)
+                col_info = [
+                    {
+                        "column_name": c.get("name"),
+                        "data_type": c.get("type"),
+                        "is_nullable": "NO" if c.get("notnull") else "YES",
+                        "column_default": c.get("dflt_value"),
+                        "is_primary_key": bool(c.get("pk")),
+                    }
+                    for c in columns
+                ]
+                count_sql = f"SELECT COUNT(*) AS cnt FROM {table_name}"
+                count_rows = await self._pool.execute_query(count_sql)
+                row_count = count_rows[0].get("cnt", "unknown") if count_rows else "unknown"
+            else:
+                columns_sql = (
+                    "SELECT column_name, data_type, is_nullable, column_default, "
+                    "character_maximum_length "
+                    "FROM information_schema.columns "
+                    f"WHERE table_name = '{table_name}' "
+                    f"AND table_schema = '{schema}' "
+                    "ORDER BY ordinal_position"
+                )
+                col_info = await self._pool.execute_query(columns_sql)
+
+                # Foreign key info
+                fk_sql = (
+                    "SELECT kcu.column_name, ccu.table_name AS foreign_table, "
+                    "ccu.column_name AS foreign_column "
+                    "FROM information_schema.table_constraints AS tc "
+                    "JOIN information_schema.key_column_usage AS kcu "
+                    "ON tc.constraint_name = kcu.constraint_name "
+                    "JOIN information_schema.constraint_column_usage AS ccu "
+                    "ON ccu.constraint_name = tc.constraint_name "
+                    f"WHERE tc.table_name = '{table_name}' "
+                    "AND tc.constraint_type = 'FOREIGN KEY'"
+                )
+                try:
+                    fk_rows = await self._pool.execute_query(fk_sql)
+                except Exception:
+                    fk_rows = []
+
+                # Approx row count
+                try:
+                    count_rows = await self._pool.execute_query(
+                        f"SELECT COUNT(*) AS cnt FROM {schema}.{table_name}"
+                    )
+                    row_count = count_rows[0].get("cnt", "unknown") if count_rows else "unknown"
+                except Exception:
+                    row_count = "unknown"
+
+                return ToolResult(
+                    data={
+                        "table_name": table_name,
+                        "schema": schema,
+                        "columns": col_info,
+                        "foreign_keys": fk_rows,
+                        "approximate_row_count": row_count,
+                    }
+                )
+
+            return ToolResult(
+                data={
+                    "table_name": table_name,
+                    "columns": col_info,
+                    "approximate_row_count": row_count,
+                }
+            )
+
+        except Exception as exc:
+            logger.exception("describe_table failed for '%s': %s", table_name, exc)
+            return ToolResult(data=None, error=f"describe_table failed: {exc}")
+
+
+class SampleRowsTool:
+    """Return a small sample of rows from a table to understand data shape."""
+
+    name = "sample_rows"
+    description = (
+        "Return a small sample of rows (default 5) from a table to understand "
+        "the data shape and example values."
+    )
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "table_name": {
+                "type": "string",
+                "description": "Name of the table to sample.",
+            },
+            "n": {
+                "type": "integer",
+                "default": 5,
+                "minimum": 1,
+                "maximum": 20,
+                "description": "Number of sample rows to return.",
+            },
+            "schema": {
+                "type": "string",
+                "description": "Database schema (default: public).",
+            },
+        },
+        "required": ["table_name"],
+    }
+    timeout_seconds: float = 15.0
+
+    def __init__(self, pool: _SharedPool, config: SQLConnectionConfig) -> None:
+        self._pool = pool
+        self._config = config
+
+    async def execute(self, ctx: AgentContext, args: dict[str, Any]) -> ToolResult:
+        """Fetch n random/first rows from the table."""
+        table_name = args["table_name"].strip()
+        n = min(int(args.get("n", 5)), 20)
+        schema = args.get("schema", "public")
+
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name):
+            return ToolResult(data=None, error=f"Invalid table name: {table_name!r}")
+
+        try:
+            if _is_sqlite(self._config.connection_string):
+                sql = f"SELECT * FROM {table_name} LIMIT {n}"
+            else:
+                sql = f"SELECT * FROM {schema}.{table_name} LIMIT {n}"
+
+            rows = await self._pool.execute_query(sql)
+            return ToolResult(
+                data=rows,
+                metadata={"table_name": table_name, "sampled_rows": len(rows)},
+            )
+        except Exception as exc:
+            logger.exception("sample_rows failed for '%s': %s", table_name, exc)
+            return ToolResult(data=None, error=f"sample_rows failed: {exc}")
+
+
+def _extract_table_names(sql: str) -> list[str]:
+    """Extract table names referenced in a SQL query (simple heuristic)."""
+    # Match FROM and JOIN clauses
+    pattern = re.compile(
+        r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_.]*)", re.IGNORECASE
+    )
+    matches = pattern.findall(sql)
+    # Strip schema prefix if present
+    tables = []
+    for m in matches:
+        parts = m.split(".")
+        tables.append(parts[-1])
+    return list(set(tables))
+
+
+def build_sql_tools(config: SQLConnectionConfig) -> list:
+    """Build all SQL tools sharing a single connection pool.
+
+    Returns a list of [ExecuteQueryTool, ListTablesTool, DescribeTableTool, SampleRowsTool].
+    """
+    pool = _SharedPool(config)
+    return [
+        ExecuteQueryTool(pool=pool, config=config),
+        ListTablesTool(pool=pool, config=config),
+        DescribeTableTool(pool=pool, config=config),
+        SampleRowsTool(pool=pool, config=config),
+    ]

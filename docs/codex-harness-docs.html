@@ -1,0 +1,2015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Codex Harness Docs</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --azure: #0078D4;
+  --azure-dark: #005a9e;
+  --azure-light: #cce4f6;
+  --teal: #008272;
+  --orange: #D83B01;
+  --green: #107C10;
+  --purple: #5C2D91;
+  --yellow: #FFB900;
+  --gray-100: #f8f9fa;
+  --gray-200: #e9ecef;
+  --gray-300: #dee2e6;
+  --gray-600: #6c757d;
+  --gray-800: #343a40;
+  --gray-900: #212529;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  --radius: 8px;
+  --shadow: 0 2px 8px rgba(0,0,0,.08), 0 0 1px rgba(0,0,0,.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--gray-900);
+  background: #f4f6f8;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.wrapper { display: flex; min-height: 100vh; }
+
+nav {
+  width: 260px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+  color: #c9d1d9;
+  position: fixed;
+  top: 0; left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+nav .nav-brand {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+nav .nav-brand h1 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.3px;
+}
+
+nav .nav-brand p {
+  font-size: 11px;
+  color: #8b949e;
+  margin-top: 3px;
+}
+
+nav ul { list-style: none; padding: 10px 0; }
+nav ul li a {
+  display: block;
+  padding: 7px 20px;
+  color: #c9d1d9;
+  text-decoration: none;
+  font-size: 13px;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+nav ul li a:hover, nav ul li a.active {
+  color: #fff;
+  background: rgba(255,255,255,.05);
+  border-left-color: var(--azure);
+}
+nav .nav-section {
+  padding: 12px 20px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #484f58;
+  font-weight: 700;
+}
+
+main {
+  margin-left: 260px;
+  flex: 1;
+  padding: 0;
+}
+
+/* ── Cover ──────────────────────────────────────────────── */
+.cover {
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a1f2e 100%);
+  color: #fff;
+  padding: 80px 60px;
+  position: relative;
+  overflow: hidden;
+}
+.cover::before {
+  content: "";
+  position: absolute;
+  top: -100px; right: -100px;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(0,120,212,.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+.cover::after {
+  content: "";
+  position: absolute;
+  bottom: -80px; left: 200px;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(92,45,145,.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+.cover-logo {
+  font-size: 52px;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+.cover h1 {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  margin-bottom: 8px;
+}
+.cover h1 span { color: #58a6ff; }
+.cover .tagline {
+  font-size: 18px;
+  color: #8b949e;
+  max-width: 560px;
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+.badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.badge-blue { background: rgba(0,120,212,.25); color: #58a6ff; border: 1px solid rgba(88,166,255,.3); }
+.badge-green { background: rgba(16,124,16,.25); color: #56d364; border: 1px solid rgba(86,211,100,.3); }
+.badge-purple { background: rgba(92,45,145,.3); color: #d2a8ff; border: 1px solid rgba(210,168,255,.3); }
+.badge-orange { background: rgba(216,59,1,.25); color: #ffa657; border: 1px solid rgba(255,166,87,.3); }
+
+/* ── Page sections ──────────────────────────────────────── */
+section {
+  background: #fff;
+  margin: 24px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+section.flush { margin: 0; border-radius: 0; box-shadow: none; }
+
+.section-header {
+  padding: 28px 36px 0;
+  border-bottom: 2px solid var(--gray-200);
+  margin-bottom: 28px;
+}
+.section-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gray-900);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.section-header p {
+  color: var(--gray-600);
+  font-size: 14px;
+  margin-bottom: 20px;
+  max-width: 640px;
+}
+
+.section-body { padding: 0 36px 36px; }
+
+h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin: 28px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+h3::before { content: ""; display: block; width: 3px; height: 18px; background: var(--azure); border-radius: 2px; }
+
+h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-700, #495057);
+  margin: 20px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+p { margin-bottom: 12px; color: var(--gray-800); }
+
+/* ── Analogy box ─────────────────────────────────────────── */
+.analogy-box {
+  background: linear-gradient(135deg, #f0f7ff, #e8f4fd);
+  border: 1px solid var(--azure-light);
+  border-left: 4px solid var(--azure);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin: 20px 0;
+}
+.analogy-box .label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--azure);
+  margin-bottom: 8px;
+}
+.analogy-box p { color: var(--gray-800); margin: 0; font-size: 15px; }
+
+/* ── Cards grid ─────────────────────────────────────────── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.card {
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 18px;
+  transition: box-shadow .15s;
+}
+.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.card .icon { font-size: 28px; margin-bottom: 10px; }
+.card h4 { font-size: 14px; font-weight: 700; color: var(--gray-900); margin: 0 0 6px; text-transform: none; letter-spacing: 0; }
+.card p { font-size: 13px; color: var(--gray-600); margin: 0; }
+.card.highlight { background: #ebf5ff; border-color: var(--azure-light); }
+.card.highlight h4 { color: var(--azure-dark); }
+
+/* ── Tables ─────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin: 16px 0; border-radius: var(--radius); border: 1px solid var(--gray-200); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+thead th {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--gray-600);
+  border-bottom: 1px solid var(--gray-300);
+}
+tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gray-200);
+  vertical-align: top;
+  color: var(--gray-800);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--gray-100); }
+.mono { font-family: var(--mono); font-size: 12.5px; background: #f1f3f5; padding: 2px 6px; border-radius: 3px; }
+
+/* ── Code blocks ─────────────────────────────────────────── */
+pre {
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 16px 0;
+  position: relative;
+  border: 1px solid #30363d;
+}
+pre .comment { color: #8b949e; }
+pre .string { color: #a5d6ff; }
+pre .keyword { color: #ff7b72; }
+pre .func { color: #d2a8ff; }
+pre .type { color: #ffa657; }
+pre .number { color: #79c0ff; }
+code { font-family: var(--mono); font-size: 13px; background: #f1f3f5; padding: 2px 6px; border-radius: 3px; color: var(--orange); }
+
+/* ── Mermaid diagrams ───────────────────────────────────── */
+.diagram-wrap {
+  background: #fafafa;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin: 20px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.diagram-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--gray-600);
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+/* ── Flow steps ─────────────────────────────────────────── */
+.flow-steps { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+.flow-step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  position: relative;
+}
+.flow-step::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 38px;
+  width: 2px;
+  height: calc(100% + 0px);
+  background: var(--gray-200);
+}
+.flow-step:last-child::before { display: none; }
+.step-num {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--azure);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+}
+.step-content { padding: 8px 0 20px; }
+.step-content h4 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--gray-900); text-transform: none; letter-spacing: 0; }
+.step-content p { margin: 0; font-size: 13.5px; color: var(--gray-600); }
+
+/* ── Info / warning boxes ───────────────────────────────── */
+.info-box, .warning-box, .tip-box {
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin: 16px 0;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13.5px;
+}
+.info-box { background: #e7f3ff; border: 1px solid #b3d7f7; }
+.warning-box { background: #fff3cd; border: 1px solid #ffc107; }
+.tip-box { background: #d4edda; border: 1px solid #c3e6cb; }
+.info-box .icon, .warning-box .icon, .tip-box .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.info-box p, .warning-box p, .tip-box p { margin: 0; }
+
+/* ── Tier diagram ───────────────────────────────────────── */
+.tier-diagram { display: flex; flex-direction: column; gap: 12px; margin: 20px 0; }
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.tier-label {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.tier-1 .tier-label { color: #D83B01; }
+.tier-2 .tier-label { color: #0078D4; }
+.tier-3 .tier-label { color: #5C2D91; }
+.tier-bar {
+  height: 8px;
+  border-radius: 4px;
+  width: 80px;
+  flex-shrink: 0;
+}
+.tier-1 .tier-bar { background: linear-gradient(90deg, #D83B01, #ffa657); }
+.tier-2 .tier-bar { background: linear-gradient(90deg, #0078D4, #58a6ff); }
+.tier-3 .tier-bar { background: linear-gradient(90deg, #5C2D91, #d2a8ff); }
+.tier-info h4 { font-size: 14px; font-weight: 700; color: var(--gray-900); margin: 0 0 3px; text-transform: none; letter-spacing: 0; }
+.tier-info p { font-size: 12.5px; color: var(--gray-600); margin: 0; }
+
+/* ── Callout stat cards ─────────────────────────────────── */
+.stat-row { display: flex; gap: 16px; margin: 20px 0; flex-wrap: wrap; }
+.stat-card {
+  flex: 1; min-width: 140px;
+  background: linear-gradient(135deg, var(--azure), var(--azure-dark));
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+.stat-card.green { background: linear-gradient(135deg, #107C10, #0b5c0b); }
+.stat-card.purple { background: linear-gradient(135deg, #5C2D91, #401f65); }
+.stat-card.orange { background: linear-gradient(135deg, #D83B01, #a02c01); }
+.stat-num { font-size: 32px; font-weight: 800; line-height: 1; }
+.stat-label { font-size: 12px; opacity: .85; margin-top: 4px; }
+
+/* ── Provider pills ─────────────────────────────────────── */
+.provider-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.provider-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid;
+}
+.provider-pill.claude { background: #fdf3e7; border-color: #f4a261; color: #c05a1a; }
+.provider-pill.openai { background: #e8f5e9; border-color: #4caf50; color: #1b5e20; }
+.provider-pill.vllm { background: #e3f2fd; border-color: #1976d2; color: #0d47a1; }
+.provider-pill.local { background: #f3e5f5; border-color: #9c27b0; color: #4a148c; }
+
+/* ── Print styles ───────────────────────────────────────── */
+@media print {
+  nav { display: none !important; }
+  main { margin-left: 0 !important; }
+  .print-btn { display: none !important; }
+  section { box-shadow: none !important; break-inside: avoid; margin: 0 !important; border-radius: 0 !important; border-bottom: 1px solid #eee; }
+  .cover { break-after: page; }
+  h2, h3 { break-after: avoid; }
+  pre { white-space: pre-wrap; }
+  body { background: #fff; font-size: 12px; }
+  .section-header { padding: 20px 24px 0; }
+  .section-body { padding: 0 24px 24px; }
+  .stat-row { break-inside: avoid; }
+}
+
+/* ── Print button ───────────────────────────────────────── */
+.print-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--azure);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,120,212,.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 200;
+  transition: transform .15s, box-shadow .15s;
+}
+.print-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,120,212,.5); }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+<!-- ── NAV ─────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-brand">
+    <h1>🧠 Codex Harness</h1>
+    <p>v0.1.0 · Documentation</p>
+  </div>
+  <ul>
+    <li class="nav-section">Introduction</li>
+    <li><a href="#overview">📋 Overview</a></li>
+    <li><a href="#why">💡 Why Codex Harness?</a></li>
+    <li><a href="#quickstart">🚀 Quick Start</a></li>
+
+    <li class="nav-section">Architecture</li>
+    <li><a href="#system-arch">🏗️ System Architecture</a></li>
+    <li><a href="#agent-lifecycle">🔄 Agent Lifecycle</a></li>
+    <li><a href="#memory">🧠 Memory System</a></li>
+    <li><a href="#graph-rag">📉 Graph RAG</a></li>
+    <li><a href="#llm-router">🔮 LLM Router</a></li>
+    <li><a href="#hermes">🔁 Hermes Loop</a></li>
+    <li><a href="#safety">🛡️ Safety Pipeline</a></li>
+
+    <li class="nav-section">Components</li>
+    <li><a href="#tools">🔧 Tool System & MCP</a></li>
+    <li><a href="#adapters">🔌 Framework Adapters</a></li>
+    <li><a href="#hitl">👤 Human-in-the-Loop</a></li>
+    <li><a href="#observability">📊 Observability</a></li>
+
+    <li class="nav-section">Guides</li>
+    <li><a href="#configuration">⚙️ Configuration</a></li>
+    <li><a href="#local-models">💻 Local Models</a></li>
+    <li><a href="#deployment">🐳 Deployment</a></li>
+    <li><a href="#code-walkthrough">👨‍💻 Code Walkthrough</a></li>
+    <li><a href="#troubleshooting">🔍 Troubleshooting</a></li>
+  </ul>
+</nav>
+
+<!-- ── MAIN ─────────────────────────────────────────────── -->
+<main>
+
+<!-- ════════════════════════════════════════════════════════
+     COVER
+═════════════════════════════════════════════════════════ -->
+<div class="cover" id="overview">
+  <div class="cover-logo">🧠</div>
+  <h1>Codex <span>Harness</span></h1>
+  <p class="tagline">Run SQL agents, code assistants, or research bots on any LLM. Bring your own framework. Memory, safety, and failure recovery come included.</p>
+  <div class="badges">
+    <span class="badge badge-blue">🐍 Python 3.11+</span>
+    <span class="badge badge-green">✅ 96 Tests Passing</span>
+    <span class="badge badge-blue">⚡ FastAPI Async</span>
+    <span class="badge badge-purple">🔮 Claude · GPT-5 · vLLM · llama.cpp</span>
+    <span class="badge badge-orange">🛡️ Guardrails Built-in</span>
+    <span class="badge badge-green">📊 MLflow · OTel · Prometheus</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     WHY
+═════════════════════════════════════════════════════════ -->
+<section id="why">
+  <div class="section-header">
+    <h2>💡 What Is Codex Harness?</h2>
+    <p>Here's the short version.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="analogy-box">
+      <div class="label">🎯 Simple Analogy</div>
+      <p>Think about what actually happens when you run an AI agent in production. You need the LLM call to work, but you also need it to not cost $500/day, to not loop forever, to remember context from 3 messages ago, and to not crash your app when the API goes down. Codex Harness handles all of that. You write the task. It handles everything else.</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-num">96</div><div class="stat-label">Tests Passing</div></div>
+      <div class="stat-card green"><div class="stat-num">83%</div><div class="stat-label">Token Reduction (Graph RAG)</div></div>
+      <div class="stat-card purple"><div class="stat-num">30+</div><div class="stat-label">Failure Classes Tracked</div></div>
+      <div class="stat-card orange"><div class="stat-num">6</div><div class="stat-label">LLM Providers</div></div>
+    </div>
+
+    <h3>What happens when you ask an AI a question?</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What You See</th><th>What Codex Harness Does Behind the Scenes</th></tr></thead>
+        <tbody>
+          <tr><td>AI answers your question</td><td>Routes to best available LLM → checks budget → falls back if provider fails</td></tr>
+          <tr><td>AI uses a tool (e.g. runs SQL)</td><td>Validates inputs against schema → safety check → executes in sandbox → logs result</td></tr>
+          <tr><td>AI "remembers" past context</td><td>Stores in Redis (short-term) and Qdrant vector DB (long-term)</td></tr>
+          <tr><td>AI finds relevant info quickly</td><td>Graph RAG traverses knowledge graph, returning 83% fewer tokens than naive search</td></tr>
+          <tr><td>AI gets smarter over time</td><td>Hermes loop: analyzes failures → proposes prompt patch → evaluates → applies if score &gt; 70%</td></tr>
+          <tr><td>System never dies from one bad call</td><td>Circuit breaker opens after 5 failures, auto-recovers in 60 seconds</td></tr>
+          <tr><td>Human approves risky action</td><td>Agent pauses, sends approval request, waits, resumes or stops</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-grid">
+      <div class="card highlight"><div class="icon">🔀</div><h4>Multi-Provider LLM Routing</h4><p>Claude, GPT-5, o4-mini, vLLM, SGLang, llama.cpp with automatic health-aware fallback</p></div>
+      <div class="card highlight"><div class="icon">🧠</div><h4>3-Tier Memory</h4><p>Redis (hot) → Vector DB (warm) → Knowledge Graph (structured multi-hop)</p></div>
+      <div class="card highlight"><div class="icon">📉</div><h4>Graph RAG</h4><p>83% token reduction via BFS traversal vs naive vector search</p></div>
+      <div class="card highlight"><div class="icon">🔌</div><h4>Framework Adapters</h4><p>LangGraph, AutoGen, and CrewAI. Wrap your existing workflow, get full observability without rewriting anything.</p></div>
+      <div class="card"><div class="icon">🔁</div><h4>Hermes Self-Improvement</h4><p>LLM analyzes its own failures and patches its own prompts automatically</p></div>
+      <div class="card"><div class="icon">🛡️</div><h4>Guardrails Built-in</h4><p>PII redaction, injection detection, tool policy, loop detection, budget</p></div>
+      <div class="card"><div class="icon">👤</div><h4>Human-in-the-Loop</h4><p>Pause agent, wait for human approval, then resume or reject</p></div>
+      <div class="card"><div class="icon">⚡</div><h4>Circuit Breaker</h4><p>Auto-open on provider failures, self-heal after 60 seconds</p></div>
+      <div class="card"><div class="icon">💰</div><h4>Cost Tracking</h4><p>Per-run, per-tenant USD cost with hard monthly budget caps</p></div>
+      <div class="card"><div class="icon">📊</div><h4>Full Observability</h4><p>MLflow traces + OTel spans + Prometheus metrics + Grafana dashboards</p></div>
+      <div class="card"><div class="icon">🧩</div><h4>MCP Support</h4><p>Connect any MCP server: filesystem, Postgres, browser, REST APIs</p></div>
+      <div class="card"><div class="icon">🔒</div><h4>Sandbox Execution</h4><p>Code runs in a Docker container with no network and a memory cap. The process can't reach anything outside it.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     QUICK START
+═════════════════════════════════════════════════════════ -->
+<section id="quickstart">
+  <div class="section-header">
+    <h2>🚀 Quick Start</h2>
+    <p>From zero to a running agent in 5 steps.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Install dependencies</h4>
+          <p>Requires Python 3.11+ and Docker Desktop.</p>
+          <pre>git clone &lt;repo&gt; && cd HarnessAgent
+poetry install</pre>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Configure API keys</h4>
+          <p>Set at least one provider key. Both are optional if you use a local model.</p>
+          <pre>cp .env.example .env
+
+<span class="comment"># Edit .env — set at least one:</span>
+ANTHROPIC_API_KEY=sk-ant-...     <span class="comment"># Claude</span>
+OPENAI_API_KEY=sk-...            <span class="comment"># GPT-4o / GPT-5</span>
+OPENAI_MODELS=gpt-4o-mini        <span class="comment"># which model(s) to use</span>
+
+<span class="comment"># Or for fully local (no API key needed):</span>
+LLAMACPP_BASE_URL=http://localhost:8080</pre>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Start infrastructure</h4>
+          <p>Redis, Qdrant, Neo4j, MLflow, Prometheus, Grafana.</p>
+          <pre>docker compose up -d
+
+<span class="comment"># Or just the essentials:</span>
+docker compose up -d redis qdrant mlflow</pre>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>Start the harness</h4>
+          <pre><span class="comment"># Terminal 1 — API server on port 8000</span>
+make api
+
+<span class="comment"># Terminal 2 — async agent worker</span>
+make worker</pre>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h4>Run your first agent</h4>
+          <pre><span class="comment"># SQL agent</span>
+curl -X POST http://localhost:8000/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_type": "sql",
+    "task": "How many users signed up this week?",
+    "metadata": {"connection_string": "sqlite:///./data/sample.db"}
+  }'
+
+<span class="comment"># Code agent</span>
+curl -X POST http://localhost:8000/runs \
+  -d '{"agent_type":"code","task":"Write a fibonacci function and test it"}'
+
+<span class="comment"># Watch live steps (Server-Sent Events stream)</span>
+curl http://localhost:8000/runs/{run_id}/steps</pre>
+        </div>
+      </div>
+    </div>
+
+    <h3>Dashboards</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Dashboard</th><th>URL</th><th>What you'll see</th></tr></thead>
+        <tbody>
+          <tr><td>📊 MLflow Traces</td><td><code>http://localhost:5000</code></td><td>Agent run traces, LLM spans, tool call timings, token counts</td></tr>
+          <tr><td>📈 Grafana</td><td><code>http://localhost:3000</code> (admin/harness_admin)</td><td>Real-time metrics: steps/s, token cost, failure rates, DLQ depth</td></tr>
+          <tr><td>🔥 Prometheus</td><td><code>http://localhost:9090</code></td><td>Raw metrics scrape endpoint</td></tr>
+          <tr><td>🗃️ Qdrant UI</td><td><code>http://localhost:6333/dashboard</code></td><td>Vector collections, memory entries</td></tr>
+          <tr><td>🌐 Neo4j Browser</td><td><code>http://localhost:7474</code></td><td>Knowledge graph: tables, columns, joins, queries</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     SYSTEM ARCHITECTURE
+═════════════════════════════════════════════════════════ -->
+<section id="system-arch">
+  <div class="section-header">
+    <h2>🏗️ System Architecture</h2>
+    <p>How the pieces connect. Start here if you're trying to understand the overall flow.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">📐 System Architecture Diagram</div>
+      <div class="mermaid">
+graph TB
+    subgraph CLIENT["🌐 Client Layer"]
+        direction LR
+        UI["Web / CLI / SDK"]
+        API_CLIENT["REST Client"]
+    end
+
+    subgraph API_LAYER["⚡ API Layer (FastAPI :8000)"]
+        direction LR
+        RUNS["POST /runs"]
+        STEPS["GET /runs/{id}/steps\n(SSE stream)"]
+        HEALTH["GET /health /metrics"]
+        HITL_API["HITL endpoints\n/hitl/pending"]
+        PATCHES["Hermes patches\n/improvement"]
+    end
+
+    subgraph WORKERS["🏭 Worker Layer (RQ)"]
+        W1["Agent Worker 1"]
+        W2["Agent Worker 2"]
+        HERMES_W["Hermes Worker\n(hourly)"]
+    end
+
+    subgraph AGENTS["🤖 Agent Execution"]
+        direction TB
+        BASE["BaseAgent\n8-stage loop"]
+        SQL["SQLAgent"]
+        CODE["CodeAgent"]
+        LG["LangGraph\nAdapter"]
+        AG["AutoGen\nAdapter"]
+        CR["CrewAI\nAdapter"]
+    end
+
+    subgraph MEMORY["🧠 Memory System"]
+        direction TB
+        STM["🔴 Hot: Redis\nConversation + Scratch"]
+        VDB["🔵 Warm: Qdrant/Chroma\nVector Search"]
+        GDB["🟣 Structured: Neo4j\nKnowledge Graph"]
+        RAG["Graph RAG Engine\n83% token reduction"]
+    end
+
+    subgraph LLM_LAYER["🔮 LLM Layer"]
+        direction LR
+        ROUTER["LLM Router\nHealth-aware + Circuit-broken"]
+        CL["☁️ Claude\nSonnet/Haiku/Opus"]
+        OAI["☁️ OpenAI\nGPT-4o/GPT-5/o4-mini"]
+        VL["💻 vLLM / SGLang\nSelf-hosted"]
+        LL["💻 llama.cpp\nCPU/Metal"]
+    end
+
+    subgraph TOOLS["🔧 Tool System"]
+        TREG["Tool Registry\nValidate + Execute"]
+        SQL_T["SQL Tools"]
+        CODE_T["Code Sandbox\n(Docker)"]
+        MCP["MCP Servers\nFilesystem/DB/APIs"]
+    end
+
+    subgraph SAFETY["🛡️ Safety"]
+        GUARD["Guardrail Pipeline\n3-stage"]
+        CB["Circuit Breaker"]
+        RATE["Rate Limiter"]
+        COST["Cost Tracker"]
+        HITL["HITL Manager\nHuman approval"]
+    end
+
+    subgraph OBS["📊 Observability"]
+        MLFL["MLflow\nAgent Traces"]
+        OTEL["OpenTelemetry\nInfra Spans"]
+        PROM["Prometheus\nMetrics"]
+        GRAF["Grafana\nDashboards"]
+    end
+
+    subgraph IMPROVE["🔄 Self-Improvement (Hermes)"]
+        ERR["Error\nCollector"]
+        PATCH["Patch\nGenerator"]
+        EVAL["Evaluator\nReplay + Score"]
+        APPLY["Apply or\nQueue for Review"]
+    end
+
+    UI --> API_CLIENT --> RUNS
+    RUNS -->|"enqueue"| W1 & W2
+    W1 & W2 --> BASE
+    BASE --> SQL & CODE & LG & AG & CR
+    BASE --> ROUTER
+    BASE --> MEMORY
+    BASE --> TOOLS
+    BASE --> SAFETY
+    BASE -->|"spans"| OBS
+    BASE -.->|"failures"| ERR
+    ERR --> PATCH --> EVAL --> APPLY -.->|"better prompts"| AGENTS
+    ROUTER --> CL & OAI & VL & LL
+    MEMORY --> STM & VDB & GDB
+    GDB --> RAG
+    TOOLS --> TREG --> SQL_T & CODE_T & MCP
+    HERMES_W --> ERR
+    STEPS -.->|"SSE"| API_CLIENT
+
+    style CLIENT fill:#e8f4fd,stroke:#0078D4
+    style API_LAYER fill:#e8f4fd,stroke:#0078D4
+    style AGENTS fill:#f3e5f5,stroke:#5C2D91
+    style MEMORY fill:#e8f5e9,stroke:#107C10
+    style LLM_LAYER fill:#fff3e0,stroke:#D83B01
+    style TOOLS fill:#fce4ec,stroke:#c62828
+    style SAFETY fill:#ffebee,stroke:#b71c1c
+    style OBS fill:#e0f2f1,stroke:#00695c
+    style IMPROVE fill:#f9fbe7,stroke:#827717
+      </div>
+    </div>
+
+    <h3>Technology Stack</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Technology</th><th>Why This Choice</th></tr></thead>
+        <tbody>
+          <tr><td>🌐 API</td><td>FastAPI + uvicorn</td><td>Async by default, which matters when you're waiting on LLMs. SSE for streaming step events to the client.</td></tr>
+          <tr><td>🔮 LLM</td><td>anthropic, openai Python SDKs</td><td>Typed async clients; both support streaming and tool calling natively</td></tr>
+          <tr><td>🔴 Short-term Memory</td><td>Redis (asyncio)</td><td>Fast enough for conversation history lookups. The pub/sub works well for the SSE step stream.</td></tr>
+          <tr><td>🔵 Long-term Memory</td><td>Qdrant / ChromaDB / Weaviate</td><td>Chroma needs zero setup, so it's the default for dev. Qdrant is better in production because it has proper metadata filtering without full table scans.</td></tr>
+          <tr><td>🟣 Knowledge Graph</td><td>NetworkX → Neo4j</td><td>NetworkX just runs in memory, which is fine during development. Switch to Neo4j when you need the graph to survive restarts.</td></tr>
+          <tr><td>📊 Agent Tracing</td><td>MLflow 2.18+</td><td>LLM-native spans (SpanType.LLM/TOOL/AGENT), experiment tracking, eval metrics</td></tr>
+          <tr><td>📡 Infra Tracing</td><td>OpenTelemetry</td><td>Vendor-neutral; exports to Jaeger, Tempo, or any OTLP-compatible backend</td></tr>
+          <tr><td>📈 Metrics</td><td>Prometheus + Grafana</td><td>15 pre-defined metrics; pre-built Harness dashboard JSON included</td></tr>
+          <tr><td>🛡️ Safety</td><td>Guardrail (local lib)</td><td>3-stage pipeline: InjectionDetector → Budget/LoopDetector → PIIRedactor</td></tr>
+          <tr><td>⚙️ Workers</td><td>RQ + Redis</td><td>It uses the same Redis connection as everything else. Could use Celery, but that adds a broker and backend setup that you don't need here.</td></tr>
+          <tr><td>🐳 Deployment</td><td>Docker Compose → Kubernetes</td><td>Compose for dev/staging; scale workers independently with replicas</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     AGENT LIFECYCLE
+═════════════════════════════════════════════════════════ -->
+<section id="agent-lifecycle">
+  <div class="section-header">
+    <h2>🔄 Agent Lifecycle</h2>
+    <p>Every run follows the same 8 stages. Knowing this helps a lot when something goes wrong.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">⏱️ Sequence: POST /runs → Final Answer</div>
+      <div class="mermaid">
+sequenceDiagram
+    participant C as 🌐 Client
+    participant A as ⚡ API
+    participant Q as 📬 Redis Queue
+    participant W as ⚙️ Worker
+    participant Ag as 🤖 BaseAgent
+    participant M as 🧠 Memory
+    participant L as 🔮 LLM Router
+    participant T as 🔧 Tools
+    participant S as 🛡️ Safety
+    participant O as 📊 MLflow
+
+    C->>A: POST /runs {agent_type, task}
+    A->>Q: enqueue(run_id)
+    A->>C: 201 {run_id, status: pending}
+
+    Q->>W: dequeue(run_id)
+    W->>Ag: agent.run(ctx)
+
+    Note over Ag: Stage 1: Resume checkpoint?
+    Ag->>Ag: checkpoint.load(run_id) → resume from step N
+
+    loop Each iteration (until done or budget exceeded)
+        Note over Ag: Stage 2: Retrieve context
+        Ag->>M: smart_retrieve(query)
+        M-->>Ag: graph_context (400 tokens) + vector_hits
+
+        Note over Ag: Stage 3: LLM call
+        Ag->>S: check_input(messages)
+        S-->>Ag: ✅ allowed
+        Ag->>L: complete(messages, tools)
+        L-->>Ag: LLMResponse {content, tool_calls, tokens}
+        Ag->>Ag: ctx.tick(tokens) - budget update
+
+        Note over Ag: Stage 4: Safety check output
+        Ag->>S: check_output(response)
+        S-->>Ag: ✅ / ❌ blocked
+
+        alt No tool calls → done
+            Ag->>Ag: extract_final_answer()
+        else Tool calls present
+            Note over Ag: Stage 5: HITL check (if needed)
+            Ag->>Ag: check_hitl(ctx, tool_call)
+
+            Note over Ag: Stage 6: Execute tools
+            Ag->>S: check_step({tool, args})
+            S-->>Ag: ✅ / ❌ blocked
+            Ag->>T: registry.execute(ctx, call)
+            T-->>Ag: ToolResult {data}
+
+            Note over Ag: Stage 7: Update memory
+            Ag->>M: push_message(role=tool, result)
+            Ag->>M: add_fact(query → table)
+        end
+
+        Note over Ag: Stage 8: Checkpoint (every 10 steps)
+        Ag->>Ag: checkpoint.save(ctx, history)
+    end
+
+    Ag->>O: mlflow.log_metrics(tokens, cost, steps)
+    Ag->>W: AgentResult {output, success, cost_usd}
+    W->>Q: update status=completed
+    C->>A: GET /runs/{id} → {status: completed, output: "..."}
+      </div>
+    </div>
+
+    <h3>The 8 Stages of <code>BaseAgent.run()</code></h3>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>🔁 Checkpoint Resume</h4>
+          <p>If the run crashed or timed out last time, it picks up from the last saved checkpoint instead of starting over. Saves you from paying for the same LLM calls twice.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>🧠 Context Preparation</h4>
+          <p>Old messages get trimmed to keep the context window from filling up. For schema lookups, the graph retriever pulls exactly what it needs through a breadth-first search instead of dumping everything in. In practice this means 400 tokens of context instead of 5,000.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>🔮 LLM Call</h4>
+          <p>The router checks which providers are healthy and picks the best one. If Claude is rate limited, it tries GPT-4o. If that's down too, it tries your local vLLM instance. Every call updates the token budget. If a provider fails 5 times in a row, the circuit breaker kicks in and stops routing to it.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>🛡️ Safety Check (Output)</h4>
+          <p>Before any tool runs, the response goes through three safety checks. PII gets redacted, toxicity gets flagged, and the content gets checked against the actual retrieved context. If something looks wrong, the run stops here.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h4>👤 HITL Gate (if configured)</h4>
+          <p>Some tools need a human in the loop before running. If you've configured a tool to require approval, the agent pauses and waits. You approve or reject through the API. Requests expire after an hour if nobody responds.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <h4>🔧 Tool Execution</h4>
+          <p>The tool registry checks that the inputs match the schema, runs the safety check, then calls the tool. Code runs inside a Docker container. SQL runs directly against your database (read-only by default). The result goes straight into the conversation history.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">7</div>
+        <div class="step-content">
+          <h4>🧠 Memory Update</h4>
+          <p>The conversation turn gets pushed to Redis. If the agent just ran a SQL query, the tool adds an edge to the knowledge graph: this query used these tables. Next time someone asks something similar, the graph traversal will find that connection.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">8</div>
+        <div class="step-content">
+          <h4>💾 Checkpoint Save (every 10 steps)</h4>
+          <p>Every 10 steps, the current state gets written to a temp file and renamed atomically. If the process dies at step 23, the next run picks up from step 20. Not perfect, but beats starting over.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     MEMORY
+═════════════════════════════════════════════════════════ -->
+<section id="memory">
+  <div class="section-header">
+    <h2>🧠 Three-Tier Memory System</h2>
+    <p>Three storage tiers, each used for a different reason. Not complicated, just worth understanding.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="tier-diagram">
+      <div class="tier tier-1">
+        <div class="tier-label">🔴 HOT</div>
+        <div class="tier-bar"></div>
+        <div class="tier-info">
+          <h4>Short-Term Memory (Redis)</h4>
+          <p>Conversation history + scratch pad. Sub-millisecond reads. TTL: 24 hours. Stores last N messages per run_id. Used for: every LLM call's message history.</p>
+        </div>
+      </div>
+      <div class="tier tier-2">
+        <div class="tier-label">🔵 WARM</div>
+        <div class="tier-bar"></div>
+        <div class="tier-info">
+          <h4>Long-Term Memory (Qdrant / Chroma / Weaviate)</h4>
+          <p>Semantic vector search over long-term facts. Embedded with sentence-transformers. PII-redacted before storage. Used for: "what did this tenant remember last time?"</p>
+        </div>
+      </div>
+      <div class="tier tier-3">
+        <div class="tier-label">🟣 STRUCTURED</div>
+        <div class="tier-bar"></div>
+        <div class="tier-info">
+          <h4>Knowledge Graph (NetworkX / Neo4j)</h4>
+          <p>Entities and relationships. Table→column edges, query→table edges, error→query edges. Used by Graph RAG for multi-hop reasoning. Gets smarter with every run.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <span class="icon">ℹ️</span>
+      <p>The memory manager scrubs PII before storing anything. Phones, emails, SSNs, card numbers all get masked. This happens automatically before any data hits the vector DB, so you don't have to remember to do it yourself.</p>
+    </div>
+
+    <h3>Smart Retrieval: How the Harness Picks Context for the LLM</h3>
+    <div class="diagram-wrap">
+      <div class="diagram-label">🔍 smart_retrieve() Decision Flow</div>
+      <div class="mermaid">
+flowchart TD
+    Q["User query:\n'Show revenue by region'"] --> EE
+
+    EE["📝 Entity Extraction\nRegex: extract 'revenue', 'region'"]
+    EE --> ANCHOR
+
+    ANCHOR["🔵 Anchor Nodes\nFind graph nodes matching entities"]
+    ANCHOR --> BFS
+
+    BFS["🕸️ BFS Traversal (2 hops)\nrevenue_facts → columns, joins, past queries"]
+    BFS --> COUNT
+
+    COUNT{"> 3 paths found?"}
+    COUNT -->|"Yes"| RENDER
+    COUNT -->|"No"| VECTOR
+
+    RENDER["📄 Render Compact Text\n~400 tokens\nrevenue_facts: table | cols: date, region_id, amount\nrevenue_facts --joins--> dim_region ON region_id=id"]
+    RENDER --> RETURN
+
+    VECTOR["🔍 Vector Fallback\nEmbed query → search Qdrant\n~2,000-5,000 tokens"]
+    VECTOR --> RETURN
+
+    RETURN["✅ RetrievalResult\n{graph_context, vector_hits, strategy, token_estimate}"]
+
+    style Q fill:#e8f4fd
+    style RENDER fill:#d4edda
+    style VECTOR fill:#fff3cd
+    style RETURN fill:#d4edda
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     GRAPH RAG
+═════════════════════════════════════════════════════════ -->
+<section id="graph-rag">
+  <div class="section-header">
+    <h2>📉 Graph RAG: 83% Token Reduction</h2>
+    <p>The short version: graph traversal gives you precise context. Vector search gives you related context. They serve different purposes.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-num">400</div><div class="stat-label">tokens (Graph RAG)</div></div>
+      <div class="stat-card orange"><div class="stat-num">5,000</div><div class="stat-label">tokens (Naive RAG)</div></div>
+      <div class="stat-card green"><div class="stat-num">83%</div><div class="stat-label">Token Savings</div></div>
+      <div class="stat-card purple"><div class="stat-num">2-hop</div><div class="stat-label">Max Traversal Depth</div></div>
+    </div>
+
+    <h3>A Real Example: SQL Agent Schema Context</h3>
+    <p>Query: <em>"Show me revenue by region for Q4"</em></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>What Happens</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td>1. Extract entities</td><td>Regex finds SQL identifiers: <code>revenue</code>, <code>region</code></td><td><code>["revenue", "region"]</code></td></tr>
+          <tr><td>2. Anchor nodes</td><td>Graph lookup: finds <code>revenue_facts</code> table, <code>dim_region</code> table</td><td>2 anchor nodes</td></tr>
+          <tr><td>3. BFS 2-hop traversal</td><td>Follows: has_column, joins, used_by edges from both anchors</td><td>12 paths found</td></tr>
+          <tr><td>4. Render compact text</td><td>Converts paths to human-readable schema lines</td><td>~400 tokens</td></tr>
+          <tr><td>5. LLM call</td><td>Uses 400-token context to write accurate SQL</td><td>✅ Correct query</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <pre><span class="comment"># What the LLM receives as context (400 tokens):</span>
+[SCHEMA]
+revenue_facts: table | cols: date(date), region_id(int), amount(decimal, NOT NULL)
+dim_region: table | cols: id(int), name(varchar), territory(varchar)
+revenue_facts --has_column--> amount
+revenue_facts --joins--> dim_region ON region_id = id
+dim_region --has_column--> name, territory
+
+[PAST QUERIES]
+SELECT SUM(amount), r.name FROM revenue_facts f
+JOIN dim_region r ON f.region_id = r.id  (success, 145ms)</pre>
+
+    <div class="tip-box">
+      <span class="icon">💡</span>
+      <p>You don't need to set up the knowledge graph manually. When the SQL agent starts, it reads the database schema and builds the initial graph. After that, every successful query adds new edges showing which tables it used. The graph just grows on its own as the agent does its work.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     LLM ROUTER
+═════════════════════════════════════════════════════════ -->
+<section id="llm-router">
+  <div class="section-header">
+    <h2>🔮 LLM Router</h2>
+    <p>The router picks a healthy provider, checks it fits your context window, and falls back automatically if it fails.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="provider-grid">
+      <div class="provider-pill claude">🟣 Anthropic Claude <small>Sonnet · Haiku · Opus</small></div>
+      <div class="provider-pill openai">🟢 OpenAI <small>GPT-4o · GPT-5 · o4-mini</small></div>
+      <div class="provider-pill vllm">🔵 vLLM <small>Any HuggingFace model</small></div>
+      <div class="provider-pill vllm">🔵 SGLang <small>RadixAttention serving</small></div>
+      <div class="provider-pill local">🟠 llama.cpp <small>GGUF quantized · CPU/Metal</small></div>
+      <div class="provider-pill local">🟠 Ollama <small>Local model server</small></div>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">🔀 LLM Router Decision Flow</div>
+      <div class="mermaid">
+flowchart TD
+    REQ["🔮 router.complete(messages, max_tokens)"]
+    REQ --> P1
+
+    P1["Provider 1: Claude\npriority=0"]
+    P1 --> H1{Health check\n✅/❌}
+    H1 -->|"❌ unhealthy"| P2
+    H1 -->|"✅ ok"| CW1
+
+    CW1{Context window\n≥ required?}
+    CW1 -->|"❌ too small"| P2
+    CW1 -->|"✅ fits"| CB1
+
+    CB1{Circuit\nbreaker?}
+    CB1 -->|"OPEN"| P2
+    CB1 -->|"CLOSED/HALF_OPEN"| CALL1
+
+    CALL1["Call Claude API"]
+    CALL1 -->|"✅ Success"| RET
+    CALL1 -->|"429 Rate Limit"| P2
+    CALL1 -->|"Timeout"| P2
+    CALL1 -->|"Other error"| RAISE
+
+    P2["Provider 2: GPT-4o-mini\npriority=20"]
+    P2 --> SIMILAR["... same checks ..."]
+    SIMILAR -->|"success"| RET
+    SIMILAR -->|"all fail"| RAISE
+
+    RET["✅ LLMResponse\n{content, tool_calls, tokens, provider}"]
+    RAISE["❌ LLMError('All providers exhausted')"]
+
+    style REQ fill:#e8f4fd
+    style RET fill:#d4edda
+    style RAISE fill:#ffebee
+      </div>
+    </div>
+
+    <h3>Supported Models</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Provider</th><th>Models</th><th>Tool Calling</th><th>Prompt Cache</th><th>Cost/1M in</th></tr></thead>
+        <tbody>
+          <tr><td>🟣 Anthropic</td><td>claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7</td><td>✅ Native</td><td>✅ cache_control</td><td>$0.25–$15</td></tr>
+          <tr><td>🟢 OpenAI GPT</td><td>gpt-4o, gpt-4o-mini, gpt-4.5, gpt-5, gpt-5-mini</td><td>✅ Native</td><td>✅ Auto</td><td>$0.15–$75</td></tr>
+          <tr><td>🟢 OpenAI o-series</td><td>o1, o1-mini, o3, o3-mini, o4-mini</td><td>⚠️ Limited</td><td>✅ Auto</td><td>$1.10–$60</td></tr>
+          <tr><td>🔵 vLLM</td><td>Any HuggingFace model</td><td>✅ Native</td><td>❌</td><td>Free</td></tr>
+          <tr><td>🔵 SGLang</td><td>Any HuggingFace model</td><td>✅ Native</td><td>❌</td><td>Free</td></tr>
+          <tr><td>🟠 llama.cpp</td><td>Any GGUF quantized model</td><td>⚠️ ReAct text</td><td>❌</td><td>Free</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-box">
+      <span class="icon">💰</span>
+      <p>llama.cpp doesn't support native function calling, so the harness injects the tool schemas as JSON in the system prompt instead and parses the model's text output for tool calls. It's not as clean as native tool use, but it works well with instruction-tuned models.</p>
+    </div>
+
+    <h3>Configure with Environment Variables</h3>
+    <pre><span class="comment"># Priority 0: Claude (primary)</span>
+ANTHROPIC_API_KEY=sk-ant-...
+
+<span class="comment"># Priority 20: OpenAI fallback</span>
+OPENAI_API_KEY=sk-...
+OPENAI_MODELS=gpt-4o-mini,gpt-4o   <span class="comment"># comma-separated</span>
+
+<span class="comment"># Priority 100: vLLM (self-hosted)</span>
+VLLM_BASE_URL=http://localhost:8000
+VLLM_MODEL=mistralai/Mistral-7B-Instruct-v0.3
+
+<span class="comment"># Priority 120: llama.cpp (CPU fallback)</span>
+LLAMACPP_BASE_URL=http://localhost:8080</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     HERMES
+═════════════════════════════════════════════════════════ -->
+<section id="hermes">
+  <div class="section-header">
+    <h2>🔁 Hermes Self-Improvement Loop</h2>
+    <p>Hermes watches your agent failures, proposes prompt improvements, and optionally applies them. It runs once an hour in the background.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="analogy-box">
+      <div class="label">🎯 Plain English</div>
+      <p>Hermes watches all the agent failures, figures out what went wrong, proposes a prompt fix, then replays the failing tasks to check if the fix actually helps. If the score clears 70%, it either applies the patch automatically or queues it for your review, depending on how you've configured <strong>HERMES_AUTO_APPLY</strong>.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">🔄 Hermes Improvement Cycle (runs every hour)</div>
+      <div class="mermaid">
+flowchart LR
+    subgraph COLLECT["1️⃣ Collect"]
+        ERR["Agent fails\nToolError, LLMError,\nSafetyViolation, etc."]
+        STORE["ErrorCollector\nembeds error + task\nstores in Qdrant"]
+        ERR --> STORE
+    end
+
+    subgraph TRIGGER["2️⃣ Trigger"]
+        CHECK{">= 5 errors\nfor agent_type?"}
+        SAMPLE["Sample 10 recent\nerrors from Qdrant"]
+        CHECK -->|"Yes"| SAMPLE
+        CHECK -->|"No, skip"| DONE0["⏭ Skip"]
+    end
+
+    subgraph PROPOSE["3️⃣ Propose"]
+        GEN["PatchGenerator\nClaude analyzes errors\n+ current prompt"]
+        PATCH["Patch JSON\n{op: append, value: 'Always validate SQL...'}"]
+        GEN --> PATCH
+    end
+
+    subgraph EVALUATE["4️⃣ Evaluate"]
+        REPLAY["Replay failing\ntasks with patch"]
+        SCORE["EvalResult\nscore = success_rate\n- 0.01×steps_delta\n- 0.001×tokens_delta"]
+        REPLAY --> SCORE
+    end
+
+    subgraph APPLY["5️⃣ Apply"]
+        DEC{score > 0.7\nAND auto_apply?}
+        APPLYP["✅ Apply patch\nNew prompt version active"]
+        QUEUE["📋 Queue for review\nGET /improvement/patches"]
+        DEC -->|"Yes"| APPLYP
+        DEC -->|"No"| QUEUE
+    end
+
+    STORE --> CHECK
+    SAMPLE --> GEN
+    PATCH --> REPLAY
+    SCORE --> DEC
+
+    style COLLECT fill:#ffebee
+    style TRIGGER fill:#fff3e0
+    style PROPOSE fill:#e8eaf6
+    style EVALUATE fill:#e8f5e9
+    style APPLY fill:#e0f2f1
+      </div>
+    </div>
+
+    <div class="warning-box">
+      <span class="icon">⚠️</span>
+      <p>Keep <code>HERMES_AUTO_APPLY=false</code>. Seriously. The patches Hermes proposes are stored at <code>GET /improvement/patches</code> for you to review first. Once you've seen it make a dozen good calls in a row, maybe turn it on. Until then, trust but verify.</p>
+    </div>
+
+    <h3>Review and Manage Patches</h3>
+    <pre><span class="comment"># See pending patches</span>
+curl http://localhost:8000/improvement/patches?status=pending | jq
+
+<span class="comment"># Approve a patch (apply immediately)</span>
+curl -X POST http://localhost:8000/improvement/patches/{patch_id}/approve
+
+<span class="comment"># Reject a patch</span>
+curl -X POST http://localhost:8000/improvement/patches/{patch_id}/reject
+
+<span class="comment"># Roll back to previous prompt version</span>
+curl -X POST http://localhost:8000/prompts/sql/rollback
+
+<span class="comment"># Trigger manual improvement cycle</span>
+curl -X POST "http://localhost:8000/improvement/cycle?agent_type=sql"</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     SAFETY
+═════════════════════════════════════════════════════════ -->
+<section id="safety">
+  <div class="section-header">
+    <h2>🛡️ Safety Pipeline</h2>
+    <p>Three checkpoints every run passes through. Input, intermediate, and output. Each one can block, rewrite, or pass the data.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">🛡️ Three-Stage Guardrail Pipeline</div>
+      <div class="mermaid">
+flowchart LR
+    IN["📥 User Input\nor LLM Message"]
+
+    subgraph S1["Stage 1: INPUT"]
+        INJ["🔍 Injection\nDetector"]
+        LEN["📏 Length\nLimiter"]
+        INJ --> LEN
+    end
+
+    subgraph S2["Stage 2: INTERMEDIATE\n(runs on every agent step)"]
+        BUD["💰 Budget\n(steps/tokens/time)"]
+        LOOP["🔁 Loop\nDetector"]
+        TOOL["🔧 Tool\nPolicy"]
+        CMD["⚠️ Destructive\nCommand Filter"]
+        BUD --> LOOP --> TOOL --> CMD
+    end
+
+    subgraph S3["Stage 3: OUTPUT"]
+        PII["🔒 PII\nRedactor"]
+        TOX["🚫 Toxicity\nDetector"]
+        GROUND["📚 Grounding\nChecker"]
+        PII --> TOX --> GROUND
+    end
+
+    OUT_OK["✅ ALLOW\nPass through"]
+    OUT_BLOCK["❌ BLOCK\nRaise SafetyViolation"]
+    OUT_REWRITE["✏️ REWRITE\nModified payload"]
+
+    IN --> S1 --> S2 --> S3
+    S3 --> OUT_OK
+    S1 -->|"first BLOCK"| OUT_BLOCK
+    S2 -->|"first BLOCK"| OUT_BLOCK
+    S3 -->|"REWRITE"| OUT_REWRITE
+
+    style S1 fill:#fff3e0,stroke:#f57c00
+    style S2 fill:#e8eaf6,stroke:#5c6bc0
+    style S3 fill:#fce4ec,stroke:#e91e63
+    style OUT_OK fill:#d4edda
+    style OUT_BLOCK fill:#ffebee
+    style OUT_REWRITE fill:#fff3cd
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Guard</th><th>Stage</th><th>What it catches</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>🔍 InjectionDetector</td><td>Input</td><td>Prompt injection patterns ("ignore previous instructions")</td><td>BLOCK</td></tr>
+          <tr><td>📏 LengthLimiter</td><td>Input</td><td>Inputs exceeding max_chars</td><td>BLOCK</td></tr>
+          <tr><td>💰 Budget</td><td>Intermediate</td><td>Exceeds step/token/time budget</td><td>BLOCK → BudgetExceeded</td></tr>
+          <tr><td>🔁 LoopDetector</td><td>Intermediate</td><td>Agent repeating identical actions (fingerprinting)</td><td>BLOCK</td></tr>
+          <tr><td>🔧 ToolPolicy</td><td>Intermediate</td><td>Tool not in allowed list for this agent type</td><td>BLOCK</td></tr>
+          <tr><td>⚠️ DestructiveCommandFilter</td><td>Intermediate</td><td>rm -rf, DROP TABLE, dangerous shell commands</td><td>BLOCK</td></tr>
+          <tr><td>🔒 PIIRedactor</td><td>Output</td><td>Phone, email, SSN, credit card in output</td><td>REWRITE (mask)</td></tr>
+          <tr><td>🚫 ToxicityDetector</td><td>Output</td><td>Harmful or offensive content</td><td>BLOCK</td></tr>
+          <tr><td>📚 GroundingChecker</td><td>Output</td><td>Output not grounded in retrieved context</td><td>ESCALATE</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     TOOLS & MCP
+═════════════════════════════════════════════════════════ -->
+<section id="tools">
+  <div class="section-header">
+    <h2>🔧 Tool System &amp; MCP</h2>
+    <p>The tools your agents can call, how to add new ones, and how MCP servers fit in.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="card-grid">
+      <div class="card"><div class="icon">🗃️</div><h4>execute_sql</h4><p>Runs SELECT queries. Read-only by default, auto-adds LIMIT if you forgot it, and updates the knowledge graph with the tables it touched.</p></div>
+      <div class="card"><div class="icon">📋</div><h4>list_tables</h4><p>Lists all tables in the database. The SQL agent calls this first, before it writes any queries, to understand what's available.</p></div>
+      <div class="card"><div class="icon">📐</div><h4>describe_table</h4><p>Returns columns, types, constraints, foreign keys, and row count for a table. Used when the agent needs to know the shape of the data before querying it.</p></div>
+      <div class="card"><div class="icon">🐍</div><h4>run_python</h4><p>Runs Python code in a Docker container with 256MB memory and no network access. Stdout and stderr come back in the result.</p></div>
+      <div class="card"><div class="icon">🔍</div><h4>lint_code</h4><p>Runs ruff against Python code and returns issues with line numbers. Useful when the code agent generates something it needs to validate before running.</p></div>
+      <div class="card"><div class="icon">📁</div><h4>read_file / write_file</h4><p>Read and write files inside the agent's workspace. Path traversal is blocked, so the agent can't escape its working directory.</p></div>
+    </div>
+
+    <h3>MCP Server Integration</h3>
+    <p>Connect any <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server. The adapter auto-discovers all tools the server exposes.</p>
+    <pre><span class="comment"># configs/mcp_servers.yaml</span>
+mcp_servers:
+  filesystem:
+    transport: stdio
+    command: [<span class="string">"npx"</span>, <span class="string">"-y"</span>, <span class="string">"@modelcontextprotocol/server-filesystem"</span>, <span class="string">"/workspace"</span>]
+
+  postgres:
+    transport: stdio
+    command: [<span class="string">"npx"</span>, <span class="string">"-y"</span>, <span class="string">"@modelcontextprotocol/server-postgres"</span>, <span class="string">"${DATABASE_URL}"</span>]
+
+  brave_search:
+    transport: stdio
+    command: [<span class="string">"npx"</span>, <span class="string">"-y"</span>, <span class="string">"@modelcontextprotocol/server-brave-search"</span>]
+    env:
+      BRAVE_API_KEY: <span class="string">"${BRAVE_API_KEY}"</span>
+
+  my_custom_api:
+    transport: sse
+    url: <span class="string">"http://localhost:3001/sse"</span></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     ADAPTERS
+═════════════════════════════════════════════════════════ -->
+<section id="adapters">
+  <div class="section-header">
+    <h2>🔌 Framework Adapters</h2>
+    <p>Already using LangGraph or CrewAI? The adapters wrap your existing workflows so they get tracing, cost tracking, and circuit breaking without rewriting anything.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Framework</th><th>How it integrates</th><th>StepEvents emitted</th><th>Budget enforcement</th></tr></thead>
+        <tbody>
+          <tr><td>🦜 LangGraph</td><td>Wraps <code>compiled.astream()</code>, one event per graph node</td><td>tool_call per node execution</td><td>✅ checked before each chunk</td></tr>
+          <tr><td>🤖 AutoGen</td><td>Patches <code>agent.receive()</code> to capture messages, runs in thread pool</td><td>message per conversation turn</td><td>✅ checked per message</td></tr>
+          <tr><td>🚢 CrewAI</td><td>Hooks <code>crew.step_callback</code>, runs <code>kickoff()</code> in thread pool</td><td>tool_call per agent step</td><td>✅ checked per step</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <pre><span class="comment"># LangGraph example</span>
+<span class="keyword">from</span> langgraph.graph <span class="keyword">import</span> StateGraph, END
+<span class="keyword">from</span> harness.adapters.langgraph <span class="keyword">import</span> LangGraphAdapter
+
+graph = StateGraph(MyState)
+graph.add_node(<span class="string">"research"</span>, research_node)
+graph.add_node(<span class="string">"write"</span>, write_node)
+graph.add_edge(<span class="string">"research"</span>, <span class="string">"write"</span>)
+graph.add_edge(<span class="string">"write"</span>, END)
+
+<span class="comment"># Wrap in harness — get MLflow traces, cost tracking, circuit breaker</span>
+adapter = LangGraphAdapter(graph)
+<span class="keyword">async for</span> event <span class="keyword">in</span> adapter.run(ctx, input={<span class="string">"task"</span>: <span class="string">"Research AI trends"</span>}):
+    print(event.event_type, event.payload[<span class="string">"node"</span>])
+
+result = <span class="keyword">await</span> adapter.get_result()
+print(result.output)</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     HITL
+═════════════════════════════════════════════════════════ -->
+<section id="hitl">
+  <div class="section-header">
+    <h2>👤 Human-in-the-Loop (HITL)</h2>
+    <p>For tools that are too risky to run automatically. The agent stops, waits for a human decision, then continues or stops based on the response.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">⏸️ HITL Pause-and-Resume Flow</div>
+      <div class="mermaid">
+sequenceDiagram
+    participant A as 🤖 Agent
+    participant H as 👤 HITLManager
+    participant R as 📬 Redis
+    participant U as 👤 Human
+    participant API as ⚡ API
+
+    A->>H: request_approval(ctx, "DELETE query", args)
+    H->>R: store ApprovalRequest {status: pending, TTL: 1h}
+    H->>U: notify (webhook / email)
+    Note over A: Agent PAUSES (await_decision)
+
+    loop Poll every 2s (up to 1h)
+        A->>R: check status
+        alt Pending
+            R-->>A: still pending
+        end
+    end
+
+    U->>API: POST /hitl/{id}/approve {resolved_by: "alice"}
+    API->>R: update status = approved
+    R-->>A: approved ✅
+    Note over A: Agent RESUMES, executes the tool
+
+    alt Rejected
+        U->>API: POST /hitl/{id}/reject
+        API->>R: update status = rejected
+        R-->>A: rejected ❌
+        Note over A: Raises HITLRejected, run stops
+    end
+      </div>
+    </div>
+
+    <pre><span class="comment"># Configure which tools require HITL in policies.py</span>
+policy = HarnessPolicy(
+    tenant_id=<span class="string">"my-tenant"</span>,
+    hitl_required_for=[
+        <span class="string">"execute_sql"</span>,  <span class="comment"># any SQL query requires approval</span>
+        <span class="string">"write_file"</span>,   <span class="comment"># writing to workspace requires approval</span>
+    ]
+)
+
+<span class="comment"># Approve via API</span>
+curl -X POST http://localhost:8000/hitl/{request_id}/approve \
+  -d '{"resolved_by": "alice@company.com"}'</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     OBSERVABILITY
+═════════════════════════════════════════════════════════ -->
+<section id="observability">
+  <div class="section-header">
+    <h2>📊 Observability Stack</h2>
+    <p>Three layers of observability: MLflow for agent traces, OTel for infrastructure, Prometheus for metrics.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="card-grid">
+      <div class="card highlight">
+        <div class="icon">🔬</div>
+        <h4>MLflow Agent Traces</h4>
+        <p>Nested spans: agent_run → llm_call / tool_call / inter_agent. Token counts, latency, cost per span. Compare runs across experiments.</p>
+      </div>
+      <div class="card highlight">
+        <div class="icon">📡</div>
+        <h4>OpenTelemetry</h4>
+        <p>Infrastructure spans: Redis calls, DB queries, HTTP requests. Exports to Jaeger, Tempo, or any OTLP backend.</p>
+      </div>
+      <div class="card highlight">
+        <div class="icon">📈</div>
+        <h4>Prometheus + Grafana</h4>
+        <p>15 pre-defined metrics. Pre-built dashboard: steps/s, token cost, failure heatmap, DLQ depth, circuit breaker states.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📋</div>
+        <h4>Audit Log</h4>
+        <p>Immutable JSONL: who ran what, when, what tools were called, what decisions were made. SHA-256 payload hashing for privacy.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📬</div>
+        <h4>Dead Letter Queue</h4>
+        <p>Runs that exhausted all retries land here. You can inspect them, fix the underlying issue, and replay them. Or leave them for Hermes to learn from.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📡</div>
+        <h4>SSE Step Stream</h4>
+        <p>Watch every agent step in real time: <code>GET /runs/{id}/steps</code> returns a server-sent events stream of StepEvents.</p>
+      </div>
+    </div>
+
+    <h3>Key Metrics</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Type</th><th>Labels</th><th>What it tells you</th></tr></thead>
+        <tbody>
+          <tr><td><code>harness_agent_steps_total</code></td><td>Counter</td><td>agent_type, tenant_id, status</td><td>How many steps agents are taking</td></tr>
+          <tr><td><code>harness_agent_tokens_total</code></td><td>Counter</td><td>agent_type, provider, token_type</td><td>Total token consumption by provider</td></tr>
+          <tr><td><code>harness_agent_latency_seconds</code></td><td>Histogram</td><td>agent_type</td><td>End-to-end run duration distribution</td></tr>
+          <tr><td><code>harness_tool_calls_total</code></td><td>Counter</td><td>tool_name, agent_type, status</td><td>Which tools are used and fail rates</td></tr>
+          <tr><td><code>harness_safety_blocks_total</code></td><td>Counter</td><td>guard, agent_type, stage</td><td>What the safety system is catching</td></tr>
+          <tr><td><code>harness_failure_total</code></td><td>Counter</td><td>failure_class, agent_type</td><td>Root cause of failures by class</td></tr>
+          <tr><td><code>harness_dlq_depth</code></td><td>Gauge</td><td>tenant_id</td><td>How many runs are stuck (alert on this!)</td></tr>
+          <tr><td><code>harness_circuit_breaker_state</code></td><td>Gauge</td><td>service</td><td>0=CLOSED, 1=OPEN, 2=HALF_OPEN</td></tr>
+          <tr><td><code>harness_cost_usd_total</code></td><td>Counter</td><td>tenant_id, model</td><td>Total spend by model</td></tr>
+          <tr><td><code>harness_hermes_patches_total</code></td><td>Counter</td><td>agent_type, status</td><td>How often Hermes improves agents</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     CONFIGURATION
+═════════════════════════════════════════════════════════ -->
+<section id="configuration">
+  <div class="section-header">
+    <h2>⚙️ Configuration Reference</h2>
+    <p>Everything goes in <code>.env</code>. Here's what each variable does.</p>
+  </div>
+  <div class="section-body">
+
+    <h3>LLM Providers</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>(none)</td><td>Claude API key. Get at console.anthropic.com</td></tr>
+          <tr><td><code>DEFAULT_MODEL</code></td><td>claude-sonnet-4-6</td><td>Which Claude model to use</td></tr>
+          <tr><td><code>OPENAI_API_KEY</code></td><td>(none)</td><td>OpenAI API key</td></tr>
+          <tr><td><code>OPENAI_MODELS</code></td><td>gpt-4o-mini</td><td>Comma-separated: <code>gpt-4o-mini,gpt-4o,o4-mini</code></td></tr>
+          <tr><td><code>OPENAI_BASE_URL</code></td><td>(none)</td><td>Override for Azure OpenAI or proxy</td></tr>
+          <tr><td><code>VLLM_BASE_URL</code></td><td>(none)</td><td>vLLM server URL, e.g. <code>http://localhost:8000</code></td></tr>
+          <tr><td><code>VLLM_MODEL</code></td><td>mistralai/Mistral-7B-Instruct-v0.3</td><td>HuggingFace model ID</td></tr>
+          <tr><td><code>SGLANG_BASE_URL</code></td><td>(none)</td><td>SGLang server URL</td></tr>
+          <tr><td><code>LLAMACPP_BASE_URL</code></td><td>(none)</td><td>llama.cpp HTTP server URL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Memory</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>VECTOR_BACKEND</code></td><td>chroma</td><td><code>chroma</code> (dev) | <code>qdrant</code> (prod) | <code>weaviate</code></td></tr>
+          <tr><td><code>GRAPH_BACKEND</code></td><td>networkx</td><td><code>networkx</code> (dev) | <code>neo4j</code> (prod)</td></tr>
+          <tr><td><code>REDIS_URL</code></td><td>redis://localhost:6379</td><td>Redis connection string</td></tr>
+          <tr><td><code>QDRANT_URL</code></td><td>http://localhost:6333</td><td>Qdrant REST endpoint</td></tr>
+          <tr><td><code>NEO4J_URL</code></td><td>bolt://localhost:7687</td><td>Neo4j bolt endpoint</td></tr>
+          <tr><td><code>EMBEDDING_MODEL</code></td><td>all-MiniLM-L6-v2</td><td>sentence-transformers model for embeddings</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Hermes &amp; Budget</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>HERMES_AUTO_APPLY</code></td><td>false</td><td>Auto-apply patches without human review</td></tr>
+          <tr><td><code>HERMES_INTERVAL_SECONDS</code></td><td>3600</td><td>How often Hermes runs (seconds)</td></tr>
+          <tr><td><code>HERMES_MIN_ERRORS_TO_TRIGGER</code></td><td>5</td><td>Minimum failures before Hermes runs</td></tr>
+          <tr><td><code>HERMES_PATCH_SCORE_THRESHOLD</code></td><td>0.7</td><td>Minimum eval score to apply a patch</td></tr>
+          <tr><td><code>COST_BUDGET_USD_PER_TENANT</code></td><td>100.0</td><td>Monthly spending cap per tenant (USD)</td></tr>
+          <tr><td><code>RATE_LIMIT_RPM</code></td><td>60</td><td>API requests per minute per tenant</td></tr>
+          <tr><td><code>JWT_SECRET_KEY</code></td><td>change-me</td><td>256-bit secret for JWT auth. Change this before you deploy.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     LOCAL MODELS
+═════════════════════════════════════════════════════════ -->
+<section id="local-models">
+  <div class="section-header">
+    <h2>💻 Running with Local Models</h2>
+    <p>No cloud API required. If you have a GPU or an M-series Mac, you can run the whole thing locally.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Backend</th><th>GPU Required</th><th>Tool Calling</th><th>Docker Profile</th><th>Best For</th></tr></thead>
+        <tbody>
+          <tr><td>🔵 vLLM</td><td>✅ Yes (CUDA)</td><td>✅ Native</td><td><code>--profile local-gpu</code></td><td>Production local inference, fastest</td></tr>
+          <tr><td>🔵 SGLang</td><td>✅ Yes (CUDA)</td><td>✅ Native</td><td><code>--profile local-gpu</code></td><td>High-throughput, RadixAttention caching</td></tr>
+          <tr><td>🟠 llama.cpp</td><td>❌ CPU/Metal</td><td>⚠️ ReAct</td><td><code>--profile local-cpu</code></td><td>M-series Mac, no GPU, dev/testing</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>llama.cpp Setup (Mac / CPU)</h3>
+    <pre><span class="comment"># 1. Download a GGUF model (Llama-3.2-3B recommended for Mac)</span>
+mkdir models
+curl -L -o models/llama-3.2-3b-q4.gguf \
+  "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+
+<span class="comment"># 2. Start llama.cpp server</span>
+docker compose --profile local-cpu up -d llamacpp
+
+<span class="comment"># 3. Configure .env</span>
+LLAMACPP_BASE_URL=http://localhost:8080
+<span class="comment"># No API key needed!</span>
+
+<span class="comment"># 4. Start harness as usual</span>
+make api && make worker</pre>
+
+    <h3>vLLM Setup (NVIDIA GPU)</h3>
+    <pre><span class="comment"># Requires NVIDIA GPU + nvidia-container-toolkit</span>
+docker compose --profile local-gpu up -d vllm
+
+<span class="comment"># Configure .env</span>
+VLLM_BASE_URL=http://localhost:8000
+VLLM_MODEL=mistralai/Mistral-7B-Instruct-v0.3</pre>
+
+    <div class="tip-box">
+      <span class="icon">💡</span>
+      <p>llama.cpp doesn't support native function calling, so the harness injects the tool schemas as JSON in the system prompt instead and parses the model's text output for tool calls. It's not as clean as native tool use, but it works well with instruction-tuned models.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     DEPLOYMENT
+═════════════════════════════════════════════════════════ -->
+<section id="deployment">
+  <div class="section-header">
+    <h2>🐳 Deployment</h2>
+    <p>How to take this from your laptop to production.</p>
+  </div>
+  <div class="section-body">
+
+    <div class="diagram-wrap">
+      <div class="diagram-label">🏭 Docker Compose Service Map</div>
+      <div class="mermaid">
+graph TB
+    subgraph INFRA["🗄️ Infrastructure Services"]
+        REDIS["Redis :6379\nmaxmem 512MB"]
+        QDRANT["Qdrant :6333\nvector store"]
+        NEO4J["Neo4j :7474/:7687\ngraph DB"]
+        CHROMA["ChromaDB :8000\ndev vector store"]
+    end
+
+    subgraph OBS_SVC["📊 Observability Services"]
+        MLFLOW_SVC["MLflow :5000\nexperiment tracking"]
+        OTEL_C["OTel Collector :4317\ntrace aggregation"]
+        PROM_SVC["Prometheus :9090\nmetrics scrape"]
+        GRAFANA_SVC["Grafana :3000\ndashboards"]
+    end
+
+    subgraph APP["⚙️ Application Services"]
+        API_SVC["API :8000\nFastAPI\nhealthcheck: /health"]
+        WORKER1["Worker 1\nRQ consumer"]
+        WORKER2["Worker 2\nRQ consumer"]
+        HERMES_SVC["Hermes Worker\nAPScheduler hourly"]
+    end
+
+    subgraph LOCAL["💻 Optional Local LLMs"]
+        VLLM_SVC["vLLM :8000\n--profile local-gpu"]
+        LLAMA["llama.cpp :8080\n--profile local-cpu"]
+    end
+
+    REDIS --> API_SVC & WORKER1 & WORKER2 & HERMES_SVC
+    QDRANT --> API_SVC & WORKER1 & WORKER2 & HERMES_SVC
+    NEO4J --> API_SVC & WORKER1 & WORKER2
+    MLFLOW_SVC --> API_SVC
+    OTEL_C --> PROM_SVC --> GRAFANA_SVC
+    API_SVC -.->|"queue"| WORKER1 & WORKER2
+
+    style INFRA fill:#e8f4fd,stroke:#0078D4
+    style OBS_SVC fill:#e8f5e9,stroke:#107C10
+    style APP fill:#f3e5f5,stroke:#5C2D91
+    style LOCAL fill:#fff3e0,stroke:#D83B01
+      </div>
+    </div>
+
+    <h3>Production Checklist</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Command / Setting</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>🔑 Strong JWT key</td><td><code>JWT_SECRET_KEY=$(openssl rand -hex 32)</code></td><td>Auth security</td></tr>
+          <tr><td>🌍 Set environment</td><td><code>ENVIRONMENT=prod</code></td><td>Enables stricter validation</td></tr>
+          <tr><td>🛡️ Keep Hermes manual</td><td><code>HERMES_AUTO_APPLY=false</code></td><td>Human review of prompt changes</td></tr>
+          <tr><td>💰 Set cost cap</td><td><code>COST_BUDGET_USD_PER_TENANT=50.0</code></td><td>Prevent runaway spending</td></tr>
+          <tr><td>⏱️ Rate limiting</td><td><code>RATE_LIMIT_RPM=30</code></td><td>Prevent abuse</td></tr>
+          <tr><td>📦 Volume persistence</td><td>Map Redis, Qdrant, Neo4j volumes</td><td>Data survives container restarts</td></tr>
+          <tr><td>📊 Grafana alert</td><td>Alert on <code>harness_dlq_depth &gt; 5</code></td><td>Catch stuck runs early</td></tr>
+          <tr><td>🔄 Scale workers</td><td><code>docker compose up --scale worker=4</code></td><td>Handle concurrent agents</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     CODE WALKTHROUGH
+═════════════════════════════════════════════════════════ -->
+<section id="code-walkthrough">
+  <div class="section-header">
+    <h2>👨‍💻 Code Walkthrough</h2>
+    <p>A real request traced through the actual code, file by file.</p>
+  </div>
+  <div class="section-body">
+
+    <h3>Step 1: API receives the request</h3>
+    <p>File: <code>src/harness/api/routes/runs.py</code></p>
+    <pre><span class="comment"># POST /runs — validates, creates RunRecord, enqueues for worker</span>
+@router.post(<span class="string">"/runs"</span>, status_code=<span class="number">201</span>)
+<span class="keyword">async def</span> <span class="func">create_run</span>(
+    body: CreateRunRequest,
+    tenant_id: str = Depends(get_current_tenant),   <span class="comment"># from JWT</span>
+    runner: AgentRunner = Depends(get_runner),
+) -> RunRecord:
+    record = <span class="keyword">await</span> runner.create_run(
+        tenant_id=tenant_id,
+        agent_type=body.agent_type,   <span class="comment"># "sql" | "code" | "research"</span>
+        task=body.task,
+        metadata=body.metadata,
+    )
+    queue.enqueue(process_run_job, record.run_id)   <span class="comment"># RQ → Redis</span>
+    <span class="keyword">return</span> record  <span class="comment"># returns immediately — async pattern</span></pre>
+
+    <h3>Step 2: SQLAgent explores the schema</h3>
+    <p>File: <code>src/harness/agents/sql_agent.py</code></p>
+    <pre><span class="comment"># Before the main loop, SQLAgent introspects the database</span>
+<span class="keyword">async def</span> <span class="func">_populate_schema</span>(self, ctx: AgentContext) -> <span class="keyword">None</span>:
+    <span class="keyword">if</span> ctx.metadata.get(<span class="string">"schema_loaded"</span>):
+        <span class="keyword">return</span>
+
+    <span class="comment"># 1. List all tables</span>
+    tables = <span class="keyword">await</span> self._tool_registry.execute(ctx, ToolCall(
+        id=<span class="string">"init-1"</span>, name=<span class="string">"list_tables"</span>, args={}
+    ))
+
+    <span class="comment"># 2. Describe each table → populate knowledge graph</span>
+    <span class="keyword">for</span> table <span class="keyword">in</span> tables.data:
+        desc = <span class="keyword">await</span> self._tool_registry.execute(ctx, ToolCall(
+            id=<span class="string">f"init-{table}"</span>, name=<span class="string">"describe_table"</span>,
+            args={<span class="string">"table_name"</span>: table}
+        ))
+        <span class="comment"># Add Table → Column edges to the knowledge graph</span>
+        <span class="keyword">await</span> ctx.memory.add_fact(<span class="string">f"table:{table}"</span>, <span class="string">"has_column"</span>, col)
+
+    ctx.metadata[<span class="string">"schema_loaded"</span>] = <span class="keyword">True</span></pre>
+
+    <h3>Step 3: The main agent loop (BaseAgent.run)</h3>
+    <p>File: <code>src/harness/agents/base.py</code></p>
+    <pre><span class="keyword">while</span> ctx.is_budget_ok():   <span class="comment"># step_count < max_steps, tokens < max_tokens, time < timeout</span>
+
+    <span class="comment"># ── Stage 2: Context preparation ──────────────────────</span>
+    history = <span class="keyword">await</span> self._fit_history(ctx, history)
+    <span class="comment"># Sliding window: keeps last N messages that fit context window</span>
+    <span class="comment"># Summarizes older messages if LLM summarizer available</span>
+
+    retrieval = <span class="keyword">await</span> ctx.memory.smart_retrieve(ctx.task, ctx)
+    <span class="comment"># Graph RAG: entity extract → BFS → ~400 tokens</span>
+    <span class="comment"># vs naive vector: ~5,000 tokens — 83% reduction</span>
+
+    messages = self.build_messages(ctx, history, retrieval)
+
+    <span class="comment"># ── Stage 3: LLM call ─────────────────────────────────</span>
+    response = <span class="keyword">await</span> self._llm_router.complete(
+        messages, max_tokens=<span class="number">2048</span>, system=self.build_system_prompt(ctx)
+    )
+    <span class="comment"># Router: Claude → GPT-4o → vLLM → llama.cpp (health-aware, circuit-broken)</span>
+
+    ctx.tick(tokens=response.input_tokens + response.output_tokens)
+    <span class="comment"># Raises BudgetExceeded if over limit</span>
+
+    <span class="comment"># ── Stage 4: Safety check ─────────────────────────────</span>
+    guard, _ = self._safety_pipeline.check_output({<span class="string">"content"</span>: response.content})
+    <span class="keyword">if</span> guard.blocked:
+        <span class="keyword">raise</span> SafetyViolation(guard.reason)
+
+    <span class="comment"># ── Done? ─────────────────────────────────────────────</span>
+    <span class="keyword">if not</span> response.tool_calls:
+        output = self.extract_final_answer(history)
+        <span class="keyword">break</span>
+
+    <span class="comment"># ── Stages 5-7: Tool execution ────────────────────────</span>
+    <span class="keyword">for</span> call <span class="keyword">in</span> response.tool_calls:
+        <span class="keyword">await</span> self._check_hitl(ctx, call)   <span class="comment"># pause if approval needed</span>
+        result = <span class="keyword">await</span> self._tool_registry.execute(ctx, call)
+        <span class="keyword">await</span> ctx.memory.push_message(ctx.run_id, <span class="string">"tool"</span>, result.to_text())
+
+    <span class="comment"># ── Stage 8: Checkpoint ───────────────────────────────</span>
+    <span class="keyword">if</span> ctx.step_count % <span class="number">10</span> == <span class="number">0</span>:
+        <span class="keyword">await</span> self._checkpoint_manager.save(ctx, history)  <span class="comment"># atomic</span></pre>
+
+    <h3>Step 4: LLM Router picks a provider</h3>
+    <p>File: <code>src/harness/llm/router.py</code></p>
+    <pre><span class="keyword">for</span> entry <span class="keyword">in</span> self._sorted_providers():   <span class="comment"># sorted by priority</span>
+    <span class="keyword">if not</span> <span class="keyword">await</span> entry.provider.health_check():
+        <span class="keyword">continue</span>   <span class="comment"># skip unhealthy providers</span>
+    <span class="keyword">if</span> required_context > entry.context_window:
+        <span class="keyword">continue</span>   <span class="comment"># skip if context won't fit</span>
+
+    breaker = self._get_breaker(entry.provider)
+    <span class="keyword">try</span>:
+        <span class="keyword">async with</span> breaker.call():   <span class="comment"># CLOSED or HALF_OPEN only</span>
+            <span class="keyword">return await</span> entry.provider.complete(messages, **kwargs)
+    <span class="keyword">except</span> (LLMRateLimitError, LLMTimeoutError):
+        <span class="keyword">continue</span>   <span class="comment"># retryable → try next provider</span>
+
+<span class="keyword">raise</span> LLMError(<span class="string">"All providers exhausted"</span>)</pre>
+
+    <h3>Step 5: Tool Registry validates and executes</h3>
+    <p>File: <code>src/harness/tools/registry.py</code></p>
+    <pre><span class="keyword">async def</span> <span class="func">execute</span>(self, ctx: AgentContext, call: ToolCall) -> ToolResult:
+    tool = self.get(call.name)
+    <span class="keyword">if not</span> tool:
+        <span class="keyword">raise</span> ToolError(<span class="string">f"Unknown tool: {call.name}"</span>, FailureClass.TOOL_NOT_FOUND)
+
+    <span class="comment"># 1. Validate inputs against JSON Schema</span>
+    jsonschema.validate(call.args, tool.input_schema)
+
+    <span class="comment"># 2. Safety check via Guardrail intermediate stage</span>
+    guard, _ = self._safety.check_step({<span class="string">"tool"</span>: call.name, <span class="string">"args"</span>: call.args})
+    <span class="keyword">if</span> guard.blocked:
+        <span class="keyword">raise</span> SafetyViolation(guard.reason)
+
+    <span class="comment"># 3. Execute with timeout</span>
+    <span class="keyword">async with</span> asyncio.timeout(tool.timeout_seconds):
+        result = <span class="keyword">await</span> tool.execute(ctx, call.args)
+
+    <span class="keyword">return</span> result</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     TROUBLESHOOTING
+═════════════════════════════════════════════════════════ -->
+<section id="troubleshooting">
+  <div class="section-header">
+    <h2>🔍 Troubleshooting</h2>
+    <p>What usually goes wrong and how to fix it.</p>
+  </div>
+  <div class="section-body">
+
+    <h3>Diagnostic Commands</h3>
+    <pre><span class="comment"># Check all services</span>
+curl http://localhost:8000/health | jq
+
+<span class="comment"># Check circuit breaker states</span>
+curl http://localhost:8000/metrics | grep circuit_breaker_state
+
+<span class="comment"># See what's failing</span>
+curl http://localhost:8000/improvement/failures/heatmap | jq
+
+<span class="comment"># Check stuck runs</span>
+curl http://localhost:8000/improvement/errors?limit=5 | jq
+
+<span class="comment"># Check pending HITL requests</span>
+curl http://localhost:8000/hitl/pending | jq
+
+<span class="comment"># Check pending Hermes patches</span>
+curl http://localhost:8000/improvement/patches?status=pending | jq</pre>
+
+    <h3>Common Issues</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Likely Cause</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>🔴 "No LLM providers configured"</td><td>Missing API keys</td><td>Add at least one to your .env file</td></tr>
+          <tr><td>🔴 "Connection refused" (redis)</td><td>Docker not running</td><td>Your Docker containers aren't running. Run <code>docker compose up -d redis</code></td></tr>
+          <tr><td>🟡 "All providers exhausted"</td><td>All LLMs failing simultaneously</td><td>Check your API keys first, then look at the <code>circuit_breaker_state</code> metric in Prometheus</td></tr>
+          <tr><td>🟡 "Circuit breaker OPEN"</td><td>5+ consecutive LLM failures</td><td>Wait 60s for auto-recovery, fix underlying API issue</td></tr>
+          <tr><td>🟡 "Budget exceeded" at step 2</td><td>max_tokens too low for task</td><td>Increase in agent metadata or raise COST_BUDGET_USD_PER_TENANT</td></tr>
+          <tr><td>🟡 Agent loops forever</td><td>Tool always fails → no progress</td><td>Check tool logs, fix tool error, or lower max_steps</td></tr>
+          <tr><td>🟡 HITL request expired</td><td>Nobody approved in 1 hour</td><td>Re-run task; check <code>GET /hitl/pending</code> regularly</td></tr>
+          <tr><td>🟠 Graph RAG returns empty</td><td>Schema not populated</td><td>Run SQLAgent first (it auto-introspects the DB)</td></tr>
+          <tr><td>🟠 Embeddings slow</td><td>sentence-transformers first load</td><td>Normal. It's slow on the first call while the model loads, then it's cached. If it's still slow after that, try a smaller embedding model.</td></tr>
+          <tr><td>🔵 Hermes proposes bad patch</td><td>Too few errors / threshold too low</td><td>Keep <code>HERMES_AUTO_APPLY=false</code>, review patches manually</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Roll Back a Bad Hermes Patch</h3>
+    <pre><span class="comment"># List all prompt versions for SQL agent</span>
+curl http://localhost:8000/prompts/sql/versions | jq '.[] | {version_number, active, score}'
+
+<span class="comment"># Roll back to previous version</span>
+curl -X POST http://localhost:8000/prompts/sql/rollback
+
+<span class="comment"># Or promote a specific version</span>
+curl -X POST http://localhost:8000/prompts/sql/promote/{version_id}</pre>
+
+    <h3>Approve a Pending HITL Request</h3>
+    <pre><span class="comment"># See what needs approval</span>
+curl http://localhost:8000/hitl/pending | jq
+
+<span class="comment"># Approve</span>
+curl -X POST http://localhost:8000/hitl/{request_id}/approve \
+  -H "Content-Type: application/json" \
+  -d '{"resolved_by": "alice@company.com"}'
+
+<span class="comment"># Reject</span>
+curl -X POST http://localhost:8000/hitl/{request_id}/reject \
+  -d '{"resolved_by": "alice@company.com"}'</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     FOOTER
+═════════════════════════════════════════════════════════ -->
+<section style="background:#1a1a2e; color:#8b949e; text-align:center; padding:32px;">
+  <p style="color:#fff; font-size:18px; margin-bottom:8px;">🧠 Codex Harness v0.1.0</p>
+  <p style="margin:0; font-size:13px;">Multi-agent AI platform · Python 3.11+ · MIT License</p>
+  <p style="margin:8px 0 0; font-size:12px; color:#484f58;">Claude · GPT-5 · vLLM · SGLang · llama.cpp · LangGraph · AutoGen · CrewAI</p>
+</section>
+
+</main>
+</div>
+
+<!-- Print button -->
+<button class="print-btn" onclick="window.print()">🖨️ Export PDF</button>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'default',
+  themeVariables: {
+    primaryColor: '#0078D4',
+    primaryTextColor: '#fff',
+    primaryBorderColor: '#005a9e',
+    lineColor: '#6c757d',
+    secondaryColor: '#f1f5f9',
+    tertiaryColor: '#e8f4fd',
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: '13px'
+  },
+  flowchart: { curve: 'basis', padding: 20 },
+  sequence: { useMaxWidth: true }
+});
+
+// Active nav highlight
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav a[href^="#"]');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 100) current = s.id; });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+</script>
+</body>
+</html>

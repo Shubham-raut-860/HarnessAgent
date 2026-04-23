@@ -1,0 +1,294 @@
+"""RunRecord and AgentRunner — orchestrates agent execution and state tracking."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
+
+_RUN_KEY_PREFIX = "harness:run"
+
+
+def _run_key(run_id: str) -> str:
+    return f"{_RUN_KEY_PREFIX}:{run_id}"
+
+
+@dataclass
+class RunRecord:
+    """Persistent record of an agent run.
+
+    Attributes:
+        run_id:       Unique identifier.
+        tenant_id:    Owning tenant.
+        agent_type:   Which agent to execute.
+        task:         The task string.
+        status:       One of: pending, running, completed, failed, cancelled.
+        result:       Serialised AgentResult once the run is done.
+        created_at:   UTC time of creation.
+        started_at:   UTC time when execution began (None until started).
+        completed_at: UTC time when execution finished (None until done).
+        hitl_pending: True when waiting for human approval.
+        metadata:     Arbitrary extra data.
+    """
+
+    run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    tenant_id: str = ""
+    agent_type: str = ""
+    task: str = ""
+    status: str = "pending"  # pending | running | completed | failed | cancelled
+    result: Optional[dict] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    hitl_pending: bool = False
+    metadata: dict = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "tenant_id": self.tenant_id,
+            "agent_type": self.agent_type,
+            "task": self.task,
+            "status": self.status,
+            "result": self.result,
+            "created_at": self.created_at.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "hitl_pending": self.hitl_pending,
+            "metadata": self.metadata,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RunRecord":
+        def _dt(v) -> Optional[datetime]:
+            if v is None:
+                return None
+            if isinstance(v, datetime):
+                return v
+            try:
+                return datetime.fromisoformat(v)
+            except (ValueError, TypeError):
+                return None
+
+        return cls(
+            run_id=data.get("run_id", uuid.uuid4().hex),
+            tenant_id=data.get("tenant_id", ""),
+            agent_type=data.get("agent_type", ""),
+            task=data.get("task", ""),
+            status=data.get("status", "pending"),
+            result=data.get("result"),
+            created_at=_dt(data.get("created_at")) or datetime.now(timezone.utc),
+            started_at=_dt(data.get("started_at")),
+            completed_at=_dt(data.get("completed_at")),
+            hitl_pending=bool(data.get("hitl_pending", False)),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+    @classmethod
+    def from_json(cls, raw: str) -> "RunRecord":
+        return cls.from_dict(json.loads(raw))
+
+
+class AgentRunner:
+    """Manages run lifecycle: create, execute, update, retrieve.
+
+    Args:
+        redis:          Async Redis client for run state persistence.
+        agent_factory:  Callable(agent_type) -> agent instance.
+        workspace_base: Base path for per-run workspace directories.
+        event_bus:      Optional EventBus for broadcasting step events.
+        error_collector: Optional ErrorCollector for recording failures.
+    """
+
+    def __init__(
+        self,
+        redis: Any,
+        agent_factory: Any,
+        workspace_base: str = "/workspaces",
+        event_bus: Optional[Any] = None,
+        error_collector: Optional[Any] = None,
+    ) -> None:
+        self._redis = redis
+        self._agent_factory = agent_factory
+        self._workspace_base = Path(workspace_base)
+        self._event_bus = event_bus
+        self._error_collector = error_collector
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
+
+    async def create_run(
+        self,
+        tenant_id: str,
+        agent_type: str,
+        task: str,
+        metadata: Optional[dict] = None,
+    ) -> RunRecord:
+        """Create and persist a new RunRecord with status=pending."""
+        record = RunRecord(
+            tenant_id=tenant_id,
+            agent_type=agent_type,
+            task=task,
+            metadata=metadata or {},
+        )
+        await self._redis.set(_run_key(record.run_id), record.to_json())
+        logger.info(
+            "Created run %s (agent_type=%s, tenant=%s)", record.run_id, agent_type, tenant_id
+        )
+        return record
+
+    async def get_run(self, run_id: str) -> Optional[RunRecord]:
+        """Retrieve a RunRecord by run_id."""
+        raw = await self._redis.get(_run_key(run_id))
+        if not raw:
+            return None
+        return RunRecord.from_json(raw if isinstance(raw, str) else raw.decode())
+
+    async def list_runs(
+        self,
+        tenant_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[RunRecord]:
+        """Return paginated RunRecords for a tenant, newest first."""
+        pattern = f"{_RUN_KEY_PREFIX}:*"
+        all_records: list[RunRecord] = []
+        async for key in self._redis.scan_iter(match=pattern, count=200):
+            raw = await self._redis.get(key)
+            if raw:
+                try:
+                    rec = RunRecord.from_json(raw if isinstance(raw, str) else raw.decode())
+                    if rec.tenant_id == tenant_id:
+                        all_records.append(rec)
+                except Exception:
+                    pass
+
+        # Sort by created_at descending
+        all_records.sort(key=lambda r: r.created_at, reverse=True)
+        return all_records[offset: offset + limit]
+
+    async def update_run(self, record: RunRecord) -> RunRecord:
+        """Persist an updated RunRecord."""
+        await self._redis.set(_run_key(record.run_id), record.to_json())
+        return record
+
+    async def cancel_run(self, run_id: str) -> Optional[RunRecord]:
+        """Mark a run as cancelled if it is still pending or running."""
+        record = await self.get_run(run_id)
+        if record is None:
+            return None
+        if record.status in ("completed", "failed", "cancelled"):
+            return record
+        record.status = "cancelled"
+        record.completed_at = datetime.now(timezone.utc)
+        await self.update_run(record)
+        logger.info("Cancelled run %s", run_id)
+        return record
+
+    # ------------------------------------------------------------------
+    # Execution
+    # ------------------------------------------------------------------
+
+    async def execute_run(self, run_id: str) -> RunRecord:
+        """Execute a run end-to-end.
+
+        Fetches the RunRecord, builds the agent context, runs the agent,
+        and updates the record with the final status and result.
+
+        Args:
+            run_id: The run to execute.
+
+        Returns:
+            The updated RunRecord.
+        """
+        record = await self.get_run(run_id)
+        if record is None:
+            raise KeyError(f"Run not found: {run_id}")
+        if record.status == "cancelled":
+            logger.info("Skipping cancelled run %s", run_id)
+            return record
+
+        # Mark as running
+        record.status = "running"
+        record.started_at = datetime.now(timezone.utc)
+        await self.update_run(record)
+
+        workspace = self._workspace_base / record.tenant_id / record.run_id
+        workspace.mkdir(parents=True, exist_ok=True)
+
+        try:
+            agent = self._agent_factory(record.agent_type)
+            agent_result = await agent.run(
+                tenant_id=record.tenant_id,
+                task=record.task,
+                run_id=record.run_id,
+                workspace_path=workspace,
+                metadata=record.metadata,
+            )
+
+            record.status = "completed" if getattr(agent_result, "success", False) else "failed"
+            record.result = _serialise_result(agent_result)
+
+        except Exception as exc:
+            logger.exception("Run %s raised unhandled exception: %s", run_id, exc)
+            record.status = "failed"
+            record.result = {
+                "run_id": run_id,
+                "output": "",
+                "steps": 0,
+                "tokens": 0,
+                "success": False,
+                "error_message": str(exc),
+            }
+            if self._error_collector is not None:
+                try:
+                    await self._error_collector.record(
+                        agent_type=record.agent_type,
+                        task=record.task,
+                        failure_class="UNKNOWN",
+                        error_message=str(exc),
+                    )
+                except Exception:
+                    pass
+
+        record.completed_at = datetime.now(timezone.utc)
+        await self.update_run(record)
+
+        logger.info(
+            "Run %s finished with status=%s", run_id, record.status
+        )
+        return record
+
+
+def _serialise_result(result: Any) -> dict:
+    """Convert an AgentResult to a plain dict for JSON storage."""
+    if isinstance(result, dict):
+        return result
+    if hasattr(result, "to_dict"):
+        return result.to_dict()
+    return {
+        "run_id": getattr(result, "run_id", ""),
+        "output": getattr(result, "output", ""),
+        "steps": getattr(result, "steps", 0),
+        "tokens": getattr(result, "tokens", 0),
+        "success": getattr(result, "success", False),
+        "failure_class": getattr(result, "failure_class", None),
+        "error_message": getattr(result, "error_message", None),
+        "elapsed_seconds": getattr(result, "elapsed_seconds", 0.0),
+        "cost_usd": getattr(result, "cost_usd", 0.0),
+    }

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+htmlcov/
+coverage.xml
+.coverage
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project runtime
+/workspaces/
+*.db
+*.sqlite
+*.sqlite3
+memory_service.db
+
+# Poetry
+poetry.lock
+
+# Docker volumes (generated)
+data/
+
+# MLflow artifacts
+mlruns/
+mlflow.db
+artifacts/
+
+# Logs
+*.log
+logs/
+
+# Models (large binary files)
+models/*.gguf
+models/*.bin
+models/*.safetensors
