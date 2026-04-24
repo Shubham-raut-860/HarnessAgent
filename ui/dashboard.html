@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HarnessAgent Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --a-blue:#0078d4;--a-dark:#003b8e;--a-navy:#243a5e;--a-cyan:#50e6ff;
+  --a-light:#eff6fc;--a-green:#107c10;--a-red:#d13438;--a-orange:#ca5010;
+  --a-purple:#8764b8;
+  --bg:#f3f2f1;--surface:#fff;--border:#e1dfdd;--text:#1b1b1b;--muted:#616161;
+  --sb-bg:#1a2236;--sb-w:220px;
+  --sans:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono','Consolas',monospace;
+  --r:6px;--r-lg:10px;--sh-sm:0 1px 4px rgba(0,0,0,.07);--sh:0 2px 10px rgba(0,0,0,.10);--tr:.18s ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:var(--sb-w) 1fr;grid-template-rows:auto 1fr;min-height:100vh}
+.topbar{grid-column:1/-1;background:var(--a-navy);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.topbar-logo{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:.98rem;letter-spacing:-.02em}
+.topbar-logo .ic{font-size:1.2rem}
+.topbar-logo .em{color:var(--a-cyan)}
+.topbar-right{display:flex;align-items:center;gap:.85rem}
+.topbar-right .status-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;box-shadow:0 0 0 2px rgba(76,175,80,.3)}
+.topbar-right .status-label{font-size:.76rem;opacity:.7}
+.topbar-right .tb-btn{
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  color:#fff;padding:.3rem .75rem;border-radius:var(--r);font-size:.78rem;
+  font-family:var(--sans);cursor:pointer;transition:var(--tr)
+}
+.topbar-right .tb-btn:hover{background:rgba(255,255,255,.22)}
+
+/* ── SIDEBAR ── */
+.sb{background:var(--sb-bg);padding-top:.5rem;display:flex;flex-direction:column}
+.nav-item{
+  display:flex;align-items:center;gap:.6rem;padding:.52rem 1.1rem;
+  color:rgba(255,255,255,.62);font-size:.83rem;cursor:pointer;
+  border-left:3px solid transparent;transition:var(--tr);
+}
+.nav-item:hover{background:rgba(0,120,212,.12);color:#fff}
+.nav-item.active{background:rgba(0,120,212,.15);color:var(--a-cyan);border-left-color:var(--a-blue);font-weight:500}
+.nav-item .ic{font-size:.9em;width:1.1em}
+.nav-sep{height:1px;background:rgba(255,255,255,.07);margin:.4rem .8rem}
+.nav-lbl{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.28);padding:.6rem 1.1rem .25rem}
+
+/* ── MAIN ── */
+.main-area{overflow-y:auto;padding:1.5rem}
+.page{display:none}
+.page.active{display:block}
+
+/* ── STATS STRIP ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem;margin-bottom:1.5rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.1rem 1.2rem;box-shadow:var(--sh-sm);position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.stat.blue::before{background:var(--a-blue)}
+.stat.green::before{background:var(--a-green)}
+.stat.orange::before{background:var(--a-orange)}
+.stat.purple::before{background:var(--a-purple)}
+.stat .label{font-size:.73rem;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem}
+.stat .val{font-size:1.65rem;font-weight:700;letter-spacing:-.03em;color:var(--text)}
+.stat .sub{font-size:.72rem;color:var(--muted);margin-top:.25rem}
+.stat .ico{position:absolute;right:1rem;top:50%;transform:translateY(-50%);font-size:1.8rem;opacity:.12}
+
+/* ── SECTION HEADER ── */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem}
+.sec-hd h2{font-size:1rem;font-weight:600;color:var(--a-navy)}
+.sec-hd .btn{
+  display:inline-flex;align-items:center;gap:.35rem;
+  background:var(--a-blue);color:#fff;border:none;padding:.4rem .9rem;
+  border-radius:var(--r);font-size:.78rem;font-weight:600;cursor:pointer;transition:var(--tr)
+}
+.sec-hd .btn:hover{background:var(--a-dark)}
+.sec-hd .btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.sec-hd .btn.ghost:hover{background:var(--bg)}
+
+/* ── GRID LAYOUT FOR MAIN CONTENT ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.grid-3-1{display:grid;grid-template-columns:2fr 1fr;gap:1rem}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;box-shadow:var(--sh-sm)}
+.card h3{font-size:.88rem;font-weight:600;margin-bottom:1rem;color:var(--text);padding-bottom:.6rem;border-bottom:1px solid var(--border)}
+
+/* ── RUN FORM ── */
+.form-row{margin-bottom:.85rem}
+.form-row label{display:block;font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.05em}
+.form-row input,
+.form-row select,
+.form-row textarea{
+  width:100%;padding:.5rem .75rem;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r);font-family:var(--sans);font-size:.85rem;color:var(--text);
+  transition:var(--tr);outline:none;
+}
+.form-row input:focus,
+.form-row select:focus,
+.form-row textarea:focus{border-color:var(--a-blue);background:var(--surface);box-shadow:0 0 0 3px rgba(0,120,212,.12)}
+.form-row textarea{resize:vertical;min-height:90px;font-family:var(--mono);font-size:.82rem}
+.form-row select{cursor:pointer}
+.submit-btn{
+  width:100%;padding:.58rem;background:var(--a-blue);color:#fff;border:none;
+  border-radius:var(--r);font-family:var(--sans);font-size:.86rem;font-weight:600;
+  cursor:pointer;transition:var(--tr);display:flex;align-items:center;justify-content:center;gap:.4rem
+}
+.submit-btn:hover{background:var(--a-dark)}
+.submit-btn:disabled{opacity:.55;cursor:not-allowed}
+
+/* ── AGENT CHIPS ── */
+.agent-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
+.agent-chip{
+  padding:.3rem .75rem;border:1.5px solid var(--border);border-radius:100px;
+  font-size:.77rem;font-weight:500;cursor:pointer;transition:var(--tr);background:var(--surface)
+}
+.agent-chip:hover{border-color:var(--a-blue);color:var(--a-blue)}
+.agent-chip.selected{background:var(--a-light);border-color:var(--a-blue);color:var(--a-blue);font-weight:600}
+
+/* ── RUN TABLE ── */
+.run-table{width:100%;border-collapse:collapse;font-size:.83rem}
+.run-table th{text-align:left;padding:.5rem .75rem;font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+.run-table td{padding:.6rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.run-table tr:last-child td{border-bottom:none}
+.run-table tr:hover td{background:#fafafa}
+.run-id{font-family:var(--mono);font-size:.77rem;color:var(--muted)}
+.run-task{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status{display:inline-flex;align-items:center;gap:.35rem;padding:.18rem .55rem;border-radius:100px;font-size:.72rem;font-weight:600}
+.status-running{background:#fff8e1;color:#e65100}
+.status-completed{background:#e8f5e9;color:var(--a-green)}
+.status-failed{background:#fde7e9;color:var(--a-red)}
+.status-pending{background:var(--a-light);color:var(--a-blue)}
+.status-dot-anim{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.run-actions{display:flex;gap:.4rem}
+.icon-btn{background:none;border:1px solid var(--border);border-radius:var(--r);padding:.28rem .45rem;cursor:pointer;font-size:.8rem;transition:var(--tr)}
+.icon-btn:hover{background:var(--bg);border-color:var(--a-blue)}
+
+/* ── LIVE LOG ── */
+.log-wrap{background:#1a2236;border-radius:var(--r);padding:.9rem 1rem;height:260px;overflow-y:auto;font-family:var(--mono);font-size:.78rem;line-height:1.6}
+.log-line{display:flex;gap:.6rem;padding:.05rem 0}
+.log-ts{color:#4a5568;flex-shrink:0}
+.log-lvl{flex-shrink:0;font-weight:600}
+.log-lvl.info{color:var(--a-cyan)}
+.log-lvl.tool{color:#68d391}
+.log-lvl.warn{color:#fbd38d}
+.log-lvl.err{color:#fc8181}
+.log-msg{color:#e2e8f0}
+
+/* ── METRICS ── */
+.metric-list{display:flex;flex-direction:column;gap:.6rem}
+.metric-row{display:flex;align-items:center;gap:.75rem}
+.metric-name{font-size:.8rem;color:var(--muted);min-width:140px}
+.metric-bar-wrap{flex:1;height:7px;background:var(--border);border-radius:100px;overflow:hidden}
+.metric-bar{height:100%;border-radius:100px;transition:width .6s ease}
+.metric-val{font-size:.78rem;font-weight:600;min-width:50px;text-align:right}
+
+/* ── CONNECTOR CARDS ── */
+.conn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem}
+.conn-card{
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:var(--r-lg);padding:1rem;text-align:center;cursor:pointer;
+  transition:var(--tr);
+}
+.conn-card:hover{border-color:var(--a-blue);box-shadow:var(--sh)}
+.conn-card.connected{border-color:var(--a-green);background:#f0fdf4}
+.conn-card .icon{font-size:1.8rem;margin-bottom:.4rem}
+.conn-card .name{font-size:.8rem;font-weight:600;margin-bottom:.2rem}
+.conn-card .state{font-size:.71rem;color:var(--muted)}
+.conn-card.connected .state{color:var(--a-green);font-weight:600}
+.conn-plus{border-style:dashed;color:var(--muted)}
+.conn-plus:hover{color:var(--a-blue)}
+
+/* ── MODAL ── */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:480px;max-width:95vw;box-shadow:var(--sh-lg)}
+.modal h3{font-size:1rem;font-weight:700;margin-bottom:1.1rem;color:var(--a-navy)}
+.modal-foot{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1.1rem;padding-top:.9rem;border-top:1px solid var(--border)}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.empty .ico{font-size:2.5rem;margin-bottom:.6rem}
+.empty p{font-size:.85rem}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── TOP BAR ── -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <span class="ic">&#x1F9E0;</span>
+      <span>Harness<span class="em">Agent</span> Studio</span>
+    </div>
+    <div class="topbar-right">
+      <span class="status-dot"></span>
+      <span class="status-label">API connected</span>
+      <button class="tb-btn" onclick="showModal('new-run-modal')">&#x2B; New Run</button>
+      <button class="tb-btn" onclick="nav('settings')">&#x2699; Settings</button>
+    </div>
+  </header>
+
+  <!-- ── SIDEBAR ── -->
+  <nav class="sb">
+    <div class="nav-lbl">Main</div>
+    <div class="nav-item active" onclick="nav('dashboard')"><span class="ic">&#x1F4CA;</span> Dashboard</div>
+    <div class="nav-item" onclick="nav('runs')"><span class="ic">&#x25B6;</span> Runs</div>
+    <div class="nav-item" onclick="nav('agents')"><span class="ic">&#x1F916;</span> Agents</div>
+    <div class="nav-item" onclick="nav('memory')"><span class="ic">&#x1F9E0;</span> Memory</div>
+    <div class="nav-sep"></div>
+    <div class="nav-lbl">Integrations</div>
+    <div class="nav-item" onclick="nav('connectors')"><span class="ic">&#x1F50C;</span> Connectors</div>
+    <div class="nav-item" onclick="nav('channels')"><span class="ic">&#x1F4F1;</span> Channels</div>
+    <div class="nav-item" onclick="nav('mcp')"><span class="ic">&#x1F527;</span> MCP Servers</div>
+    <div class="nav-sep"></div>
+    <div class="nav-lbl">System</div>
+    <div class="nav-item" onclick="nav('hermes')"><span class="ic">&#x1F501;</span> Hermes</div>
+    <div class="nav-item" onclick="nav('settings')"><span class="ic">&#x2699;</span> Settings</div>
+  </nav>
+
+  <!-- ── MAIN ── -->
+  <main class="main-area">
+
+    <!-- DASHBOARD PAGE -->
+    <div id="page-dashboard" class="page active">
+      <div class="stats">
+        <div class="stat blue"><div class="label">Total Runs</div><div class="val" id="stat-total">0</div><div class="sub">All time</div><span class="ico">&#x25B6;</span></div>
+        <div class="stat green"><div class="label">Success Rate</div><div class="val" id="stat-success">—</div><div class="sub">Last 7 days</div><span class="ico">&#x2714;</span></div>
+        <div class="stat orange"><div class="label">Avg Tokens / Run</div><div class="val" id="stat-tokens">—</div><div class="sub">Last 24 hours</div><span class="ico">&#x1F4AC;</span></div>
+        <div class="stat purple"><div class="label">Total Cost</div><div class="val" id="stat-cost">$0.00</div><div class="sub">This month</div><span class="ico">&#x1F4B0;</span></div>
+      </div>
+
+      <div class="grid-3-1">
+        <div>
+          <!-- Recent Runs -->
+          <div class="sec-hd">
+            <h2>Recent Runs</h2>
+            <button class="btn ghost" onclick="nav('runs')">View All</button>
+          </div>
+          <div class="card" style="padding:0">
+            <table class="run-table">
+              <thead><tr><th>Run ID</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th><th></th></tr></thead>
+              <tbody id="run-tbody">
+                <tr><td colspan="6"><div class="empty"><div class="ico">&#x1F4CB;</div><p>No runs yet. Create one to get started.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Live Log -->
+          <div class="sec-hd" style="margin-top:1.25rem">
+            <h2>Live Log</h2>
+            <button class="btn ghost" id="log-toggle" onclick="toggleLog()">Pause</button>
+          </div>
+          <div class="log-wrap" id="live-log">
+            <div class="log-line"><span class="log-ts">00:00:00</span><span class="log-lvl info">INFO</span><span class="log-msg">HarnessAgent Studio ready. Waiting for runs...</span></div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Quick Run Form -->
+          <div class="sec-hd"><h2>Quick Run</h2></div>
+          <div class="card">
+            <div class="agent-chips" id="agent-chips">
+              <div class="agent-chip selected" onclick="selectAgent(this,'sql')">&#x1F5C4; SQL</div>
+              <div class="agent-chip" onclick="selectAgent(this,'code')">&#x1F4BB; Code</div>
+              <div class="agent-chip" onclick="selectAgent(this,'research')">&#x1F50D; Research</div>
+              <div class="agent-chip" onclick="selectAgent(this,'custom')">&#x1F4A0; Custom</div>
+            </div>
+            <div class="form-row">
+              <label>Task</label>
+              <textarea id="quick-task" placeholder="How many users signed up this week?&#10;&#10;Write a function to calculate fibonacci...&#10;&#10;Summarize the latest Q3 report..."></textarea>
+            </div>
+            <div class="form-row">
+              <label>Tenant</label>
+              <input type="text" id="quick-tenant" value="default" placeholder="tenant-id">
+            </div>
+            <button class="submit-btn" id="quick-submit" onclick="submitRun()">
+              &#x25B6; Run Agent
+            </button>
+          </div>
+
+          <!-- Metrics -->
+          <div class="sec-hd" style="margin-top:1.25rem"><h2>LLM Providers</h2></div>
+          <div class="card">
+            <div class="metric-list">
+              <div class="metric-row">
+                <span class="metric-name">Claude (Anthropic)</span>
+                <div class="metric-bar-wrap"><div class="metric-bar" style="width:78%;background:#8764b8"></div></div>
+                <span class="metric-val" style="color:#8764b8">78%</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-name">GPT-4o (OpenAI)</span>
+                <div class="metric-bar-wrap"><div class="metric-bar" style="width:15%;background:#0078d4"></div></div>
+                <span class="metric-val" style="color:#0078d4">15%</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-name">Local (llama.cpp)</span>
+                <div class="metric-bar-wrap"><div class="metric-bar" style="width:7%;background:#107c10"></div></div>
+                <span class="metric-val" style="color:#107c10">7%</span>
+              </div>
+            </div>
+            <div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:.75rem">
+              <div style="display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-bottom:.35rem">
+                <span>Circuit Breakers</span><span style="color:var(--a-green);font-weight:600">All Closed</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted)">
+                <span>GraphRAG Hit Rate</span><span style="color:var(--a-blue);font-weight:600">83%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENTS PAGE -->
+    <div id="page-agents" class="page">
+      <div class="sec-hd"><h2>Agent Registry</h2><button class="btn" onclick="showModal('new-agent-modal')">&#x2B; New Agent</button></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.85rem">
+        <div class="card" style="border-left:3px solid var(--a-green)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+            <span style="font-size:.85rem;font-weight:600">SQL Agent</span>
+            <span class="status status-completed">Active</span>
+          </div>
+          <p style="font-size:.79rem;color:var(--muted);margin-bottom:.6rem">Answers business questions in plain English using SQL. Reads schema into knowledge graph, generates safe SELECT-only queries.</p>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <span style="font-size:.71rem;background:var(--a-light);color:var(--a-blue);padding:.12rem .45rem;border-radius:100px;font-weight:600">GraphRAG</span>
+            <span style="font-size:.71rem;background:#e8f5e9;color:var(--a-green);padding:.12rem .45rem;border-radius:100px;font-weight:600">PII Redaction</span>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--a-blue)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+            <span style="font-size:.85rem;font-weight:600">Code Agent</span>
+            <span class="status status-completed">Active</span>
+          </div>
+          <p style="font-size:.79rem;color:var(--muted);margin-bottom:.6rem">Reads workspace, writes code, lints, runs in Docker sandbox, and iterates on errors. Checkpointed every 10 steps.</p>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <span style="font-size:.71rem;background:var(--a-light);color:var(--a-blue);padding:.12rem .45rem;border-radius:100px;font-weight:600">Docker Sandbox</span>
+            <span style="font-size:.71rem;background:#fde7e9;color:var(--a-red);padding:.12rem .45rem;border-radius:100px;font-weight:600">256MB Limit</span>
+          </div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--a-purple)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+            <span style="font-size:.85rem;font-weight:600">Research Agent</span>
+            <span class="status status-completed">Active</span>
+          </div>
+          <p style="font-size:.79rem;color:var(--muted);margin-bottom:.6rem">Ingests documents and URLs into vector store + knowledge graph. Answers multi-hop questions with citations.</p>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <span style="font-size:.71rem;background:#f3effa;color:var(--a-purple);padding:.12rem .45rem;border-radius:100px;font-weight:600">Vector RAG</span>
+            <span style="font-size:.71rem;background:#f3effa;color:var(--a-purple);padding:.12rem .45rem;border-radius:100px;font-weight:600">Citations</span>
+          </div>
+        </div>
+        <div class="card" style="border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.5rem;cursor:pointer;min-height:130px" onclick="showModal('new-agent-modal')">
+          <span style="font-size:1.5rem;color:var(--muted)">&#x2B;</span>
+          <span style="font-size:.82rem;color:var(--muted)">Create Agent from Template</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONNECTORS PAGE -->
+    <div id="page-connectors" class="page">
+      <div class="sec-hd"><h2>Database Connectors</h2><button class="btn" onclick="showModal('conn-modal')">&#x2B; Add Connector</button></div>
+      <div class="conn-grid">
+        <div class="conn-card connected"><div class="icon">&#x1F5C4;</div><div class="name">PostgreSQL</div><div class="state">&#x2714; Connected</div></div>
+        <div class="conn-card"><div class="icon">&#x1F5C4;</div><div class="name">MySQL</div><div class="state">Not connected</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4C2;</div><div class="name">MongoDB</div><div class="state">Not connected</div></div>
+        <div class="conn-card"><div class="icon">&#x2601;</div><div class="name">Snowflake</div><div class="state">Not connected</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4CA;</div><div class="name">BigQuery</div><div class="state">Not connected</div></div>
+        <div class="conn-card"><div class="icon">&#x1F5C4;</div><div class="name">SQLite</div><div class="state">Not connected</div></div>
+        <div class="conn-card conn-plus" onclick="showModal('conn-modal')"><div class="icon" style="font-size:1.4rem">&#x2B;</div><div class="name">Add Source</div></div>
+      </div>
+    </div>
+
+    <!-- CHANNELS PAGE -->
+    <div id="page-channels" class="page">
+      <div class="sec-hd"><h2>Channel Publishing</h2><button class="btn" onclick="showModal('channel-modal')">&#x2B; Add Channel</button></div>
+      <div class="conn-grid">
+        <div class="conn-card connected"><div class="icon">&#x1F4AC;</div><div class="name">Web Embed</div><div class="state">&#x2714; Live</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4F1;</div><div class="name">Teams</div><div class="state">Not published</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4AC;</div><div class="name">WhatsApp</div><div class="state">Not published</div></div>
+        <div class="conn-card"><div class="icon">&#x2708;</div><div class="name">Telegram</div><div class="state">Not published</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4AC;</div><div class="name">Slack</div><div class="state">Not published</div></div>
+        <div class="conn-card"><div class="icon">&#x1F4E7;</div><div class="name">Messenger</div><div class="state">Not published</div></div>
+        <div class="conn-card conn-plus" onclick="showModal('channel-modal')"><div class="icon" style="font-size:1.4rem">&#x2B;</div><div class="name">Add Channel</div></div>
+      </div>
+      <div style="margin-top:1.5rem">
+        <div class="sec-hd"><h2>Web Embed Snippet</h2></div>
+        <div class="card">
+          <p style="font-size:.82rem;color:var(--muted);margin-bottom:.85rem">Paste this into any webpage to embed your agent as a chat widget.</p>
+          <div style="background:#1a2236;border-radius:var(--r);padding:.9rem 1rem;font-family:var(--mono);font-size:.78rem;color:#e2e8f0;line-height:1.7">
+            &lt;script<br>
+            &nbsp;&nbsp;src="https://your-domain/harness-widget.js"<br>
+            &nbsp;&nbsp;data-agent="sql"<br>
+            &nbsp;&nbsp;data-tenant="your-tenant"<br>
+            &gt;&lt;/script&gt;
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MCP PAGE -->
+    <div id="page-mcp" class="page">
+      <div class="sec-hd"><h2>MCP Servers</h2><button class="btn" onclick="showModal('mcp-modal')">&#x2B; Add Server</button></div>
+      <div class="card" style="padding:0">
+        <table class="run-table">
+          <thead><tr><th>Name</th><th>Transport</th><th>Command / URL</th><th>Tools</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>brave-search</strong></td>
+              <td>stdio</td>
+              <td style="font-family:var(--mono);font-size:.76rem">npx @modelcontextprotocol/brave</td>
+              <td>3</td>
+              <td><span class="status status-completed">Connected</span></td>
+              <td><button class="icon-btn">&#x1F5D1;</button></td>
+            </tr>
+            <tr>
+              <td colspan="6"><div class="empty" style="padding:1.5rem"><div class="ico" style="font-size:1.5rem">&#x1F527;</div><p>Add MCP servers to give agents access to more tools.</p></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- HERMES PAGE -->
+    <div id="page-hermes" class="page">
+      <div class="sec-hd"><h2>Hermes Self-Improvement</h2></div>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat blue"><div class="label">Errors Collected</div><div class="val" id="h-errors">0</div><div class="sub">Since last reset</div></div>
+        <div class="stat green"><div class="label">Patches Applied</div><div class="val" id="h-patches">0</div><div class="sub">Score &ge; 70%</div></div>
+        <div class="stat orange"><div class="label">Avg Patch Score</div><div class="val" id="h-score">&mdash;</div><div class="sub">Eval on test replay</div></div>
+      </div>
+      <div class="card" style="padding:0;margin-top:.5rem">
+        <table class="run-table">
+          <thead><tr><th>Patch ID</th><th>Agent</th><th>Score</th><th>Status</th><th>Created</th><th></th></tr></thead>
+          <tbody><tr><td colspan="6"><div class="empty"><div class="ico">&#x1F501;</div><p>No patches yet. Hermes runs every hour when 5+ errors are collected.</p></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div id="page-settings" class="page">
+      <div class="sec-hd"><h2>Settings</h2></div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>LLM Providers</h3>
+          <div class="form-row"><label>Anthropic API Key</label><input type="password" placeholder="sk-ant-api03-..."></div>
+          <div class="form-row"><label>OpenAI API Key</label><input type="password" placeholder="sk-..."></div>
+          <div class="form-row"><label>Default Model</label>
+            <select>
+              <option>claude-sonnet-4-6</option>
+              <option>claude-opus-4-7</option>
+              <option>gpt-4o</option>
+              <option>gpt-5</option>
+            </select>
+          </div>
+          <button class="submit-btn" style="margin-top:.5rem">Save LLM Settings</button>
+        </div>
+        <div class="card">
+          <h3>Safety &amp; Budget</h3>
+          <div class="form-row"><label>Monthly Budget (USD / tenant)</label><input type="number" value="100" min="1"></div>
+          <div class="form-row"><label>Rate Limit (RPM)</label><input type="number" value="60" min="1"></div>
+          <div class="form-row"><label>Hermes Auto-Apply Patches</label>
+            <select><option value="false">Disabled (review manually)</option><option value="true">Enabled</option></select>
+          </div>
+          <div class="form-row"><label>Patch Score Threshold</label><input type="number" value="0.7" min="0" max="1" step="0.05"></div>
+          <button class="submit-btn" style="margin-top:.5rem">Save Safety Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMORY PAGE -->
+    <div id="page-memory" class="page">
+      <div class="sec-hd"><h2>Memory Explorer</h2></div>
+      <div class="grid-3-1">
+        <div class="card">
+          <h3>Recall Query</h3>
+          <div class="form-row"><label>Query</label><input type="text" placeholder="users signed up last month..."></div>
+          <div class="form-row"><label>Tenant</label><input type="text" value="default"></div>
+          <button class="submit-btn" onclick="recallMemory()">&#x1F50D; Recall</button>
+          <div id="recall-result" style="margin-top:1rem;background:#f9f9f9;border-radius:var(--r);padding:.75rem;font-size:.8rem;min-height:60px;color:var(--muted)">Results will appear here...</div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Memory Stats</h3>
+            <div class="metric-list">
+              <div class="metric-row"><span class="metric-name">Vector chunks</span><span class="metric-val">—</span></div>
+              <div class="metric-row"><span class="metric-name">Graph nodes</span><span class="metric-val">—</span></div>
+              <div class="metric-row"><span class="metric-name">Redis keys</span><span class="metric-val">—</span></div>
+              <div class="metric-row"><span class="metric-name">Avg retrieval ms</span><span class="metric-val">—</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RUNS PAGE -->
+    <div id="page-runs" class="page">
+      <div class="sec-hd"><h2>All Runs</h2><button class="btn" onclick="showModal('new-run-modal')">&#x2B; New Run</button></div>
+      <div class="card" style="padding:0">
+        <table class="run-table">
+          <thead><tr><th>Run ID</th><th>Agent</th><th>Task</th><th>Tenant</th><th>Status</th><th>Tokens</th><th>Cost</th><th>Duration</th></tr></thead>
+          <tbody id="all-runs-tbody">
+            <tr><td colspan="8"><div class="empty"><div class="ico">&#x1F4CB;</div><p>No runs yet. Create one to get started.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── MODALS ── -->
+
+<!-- New Run Modal -->
+<div class="modal-backdrop" id="new-run-modal">
+  <div class="modal">
+    <h3>&#x25B6; Create New Run</h3>
+    <div class="form-row"><label>Agent Type</label>
+      <select id="m-agent"><option value="sql">SQL Agent</option><option value="code">Code Agent</option><option value="research">Research Agent</option></select>
+    </div>
+    <div class="form-row"><label>Task</label><textarea id="m-task" placeholder="Describe what the agent should do..."></textarea></div>
+    <div class="form-row"><label>Tenant ID</label><input type="text" id="m-tenant" value="default"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="submitModalRun()">&#x25B6; Run</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Agent Modal -->
+<div class="modal-backdrop" id="new-agent-modal">
+  <div class="modal">
+    <h3>&#x1F916; Create Agent from Template</h3>
+    <p style="font-size:.83rem;color:var(--muted);margin-bottom:1rem">Copy <code>src/harness/agents/_template.py</code> and follow the 3-step process in the template file.</p>
+    <div class="form-row"><label>Agent Name</label><input type="text" placeholder="my_agent"></div>
+    <div class="form-row"><label>Domain</label><input type="text" placeholder="finance, healthcare, legal..."></div>
+    <div class="form-row"><label>Base Template</label>
+      <select><option>BaseAgent (ReAct)</option><option>SQLAgent</option><option>CodeAgent</option></select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="closeModals()">Generate Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- Connector Modal -->
+<div class="modal-backdrop" id="conn-modal">
+  <div class="modal">
+    <h3>&#x1F50C; Add Database Connector</h3>
+    <div class="form-row"><label>Type</label>
+      <select><option>PostgreSQL</option><option>MySQL</option><option>MongoDB</option><option>SQLite</option><option>Snowflake</option><option>BigQuery</option></select>
+    </div>
+    <div class="form-row"><label>Connection String</label><input type="text" placeholder="postgresql://user:pass@host:5432/db"></div>
+    <div class="form-row"><label>Name / Label</label><input type="text" placeholder="production-db"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="closeModals()">Test &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Channel Modal -->
+<div class="modal-backdrop" id="channel-modal">
+  <div class="modal">
+    <h3>&#x1F4F1; Publish to Channel</h3>
+    <div class="form-row"><label>Channel</label>
+      <select><option>Web Embed</option><option>Microsoft Teams</option><option>WhatsApp Business</option><option>Telegram</option><option>Slack</option><option>Messenger</option></select>
+    </div>
+    <div class="form-row"><label>Agent to Publish</label>
+      <select><option>SQL Agent</option><option>Code Agent</option><option>Research Agent</option></select>
+    </div>
+    <div class="form-row"><label>Webhook / Bot Token</label><input type="text" placeholder="Bot token or webhook URL"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="closeModals()">Publish</button>
+    </div>
+  </div>
+</div>
+
+<!-- MCP Modal -->
+<div class="modal-backdrop" id="mcp-modal">
+  <div class="modal">
+    <h3>&#x1F527; Add MCP Server</h3>
+    <div class="form-row"><label>Name</label><input type="text" placeholder="brave-search"></div>
+    <div class="form-row"><label>Transport</label>
+      <select><option>stdio</option><option>SSE</option></select>
+    </div>
+    <div class="form-row"><label>Command / URL</label><input type="text" placeholder="npx @modelcontextprotocol/server-name or https://..."></div>
+    <div class="form-row"><label>Environment Variables (JSON)</label><textarea placeholder='{"BRAVE_API_KEY": "BSA..."}'></textarea></div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="closeModals()">Add Server</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let selectedAgent = 'sql';
+let logPaused = false;
+let runs = [];
+
+// ── Navigation ──
+function nav(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.textContent.toLowerCase().includes(page)) n.classList.add('active');
+  });
+}
+
+// ── Modals ──
+function showModal(id) { document.getElementById(id).classList.add('open') }
+function closeModals() { document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('open')) }
+document.querySelectorAll('.modal-backdrop').forEach(m =>
+  m.addEventListener('click', e => { if (e.target === m) closeModals() })
+);
+
+// ── Agent chip selection ──
+function selectAgent(el, type) {
+  document.querySelectorAll('.agent-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedAgent = type;
+}
+
+// ── Submit run ──
+async function submitRun() {
+  const task = document.getElementById('quick-task').value.trim();
+  const tenant = document.getElementById('quick-tenant').value.trim() || 'default';
+  if (!task) return;
+  document.getElementById('quick-submit').disabled = true;
+  document.getElementById('quick-submit').textContent = 'Running...';
+  try {
+    const res = await fetch(API + '/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_type: selectedAgent, task, metadata: { tenant_id: tenant } })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      addLog('info', `Run created: ${data.run_id}`);
+      addRunToTable(data.run_id, selectedAgent, task, 'pending');
+      document.getElementById('quick-task').value = '';
+      fetchStats();
+    } else {
+      addLog('err', `Error: ${res.status} ${res.statusText}`);
+    }
+  } catch (e) {
+    addLog('warn', `API unreachable — ${e.message}. Running in demo mode.`);
+    const fakeId = Math.random().toString(36).slice(2, 10);
+    addRunToTable(fakeId, selectedAgent, task, 'running');
+    setTimeout(() => updateRunStatus(fakeId, 'completed'), 3000 + Math.random() * 4000);
+  }
+  document.getElementById('quick-submit').disabled = false;
+  document.getElementById('quick-submit').innerHTML = '&#x25B6; Run Agent';
+}
+
+async function submitModalRun() {
+  const task = document.getElementById('m-task').value.trim();
+  const agent = document.getElementById('m-agent').value;
+  if (!task) return;
+  closeModals();
+  const fakeId = Math.random().toString(36).slice(2, 10);
+  addRunToTable(fakeId, agent, task, 'running');
+  addLog('info', `Run ${fakeId} started (${agent})`);
+  setTimeout(() => updateRunStatus(fakeId, 'completed'), 4000 + Math.random() * 3000);
+}
+
+// ── Table helpers ──
+function addRunToTable(id, agent, task, status) {
+  runs.unshift({ id, agent, task, status, tokens: '—', cost: '—' });
+  renderRunTable();
+  renderAllRunsTable();
+  document.getElementById('stat-total').textContent = runs.length;
+}
+
+function updateRunStatus(id, newStatus) {
+  const run = runs.find(r => r.id === id);
+  if (run) { run.status = newStatus; run.tokens = Math.floor(1200 + Math.random() * 3000); run.cost = '$' + (Math.random() * 0.08).toFixed(4); }
+  renderRunTable(); renderAllRunsTable(); fetchStats();
+  addLog('info', `Run ${id} → ${newStatus}`);
+}
+
+function renderRunTable() {
+  const tbody = document.getElementById('run-tbody');
+  if (!runs.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty"><div class="ico">&#x1F4CB;</div><p>No runs yet.</p></div></td></tr>'; return; }
+  tbody.innerHTML = runs.slice(0,8).map(r => `
+    <tr>
+      <td class="run-id">${r.id.slice(0,8)}</td>
+      <td>${r.agent}</td>
+      <td class="run-task">${r.task}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${r.tokens}</td>
+      <td><div class="run-actions"><button class="icon-btn" title="View steps">&#x1F4CB;</button></div></td>
+    </tr>`).join('');
+}
+
+function renderAllRunsTable() {
+  const tbody = document.getElementById('all-runs-tbody');
+  if (!runs.length) { tbody.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="ico">&#x1F4CB;</div><p>No runs yet.</p></div></td></tr>'; return; }
+  tbody.innerHTML = runs.map(r => `
+    <tr>
+      <td class="run-id">${r.id.slice(0,8)}</td>
+      <td>${r.agent}</td>
+      <td class="run-task">${r.task}</td>
+      <td>default</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${r.tokens}</td>
+      <td>${r.cost}</td>
+      <td>${r.status === 'running' ? '...' : Math.floor(3 + Math.random() * 12) + 's'}</td>
+    </tr>`).join('');
+}
+
+function statusBadge(s) {
+  const map = { running:'status-running', completed:'status-completed', failed:'status-failed', pending:'status-pending' };
+  const dot = s === 'running' ? '<span class="status-dot-anim"></span>' : '';
+  return `<span class="status ${map[s]||''}">${dot}${s}</span>`;
+}
+
+// ── Live log ──
+function addLog(level, msg) {
+  if (logPaused) return;
+  const wrap = document.getElementById('live-log');
+  const now = new Date();
+  const ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => n.toString().padStart(2,'0')).join(':');
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  div.innerHTML = `<span class="log-ts">${ts}</span><span class="log-lvl ${level}">${level.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function toggleLog() {
+  logPaused = !logPaused;
+  document.getElementById('log-toggle').textContent = logPaused ? 'Resume' : 'Pause';
+}
+
+// ── Stats ──
+async function fetchStats() {
+  const done = runs.filter(r => r.status === 'completed');
+  const rate = runs.length ? Math.round((done.length / runs.length) * 100) : 0;
+  document.getElementById('stat-success').textContent = rate + '%';
+  const totalTokens = done.reduce((a, r) => a + (parseInt(r.tokens) || 0), 0);
+  document.getElementById('stat-tokens').textContent = done.length ? Math.round(totalTokens / done.length).toLocaleString() : '—';
+  const totalCost = done.reduce((a, r) => a + parseFloat((r.cost || '0').replace('$', '')), 0);
+  document.getElementById('stat-cost').textContent = '$' + totalCost.toFixed(4);
+}
+
+function recallMemory() {
+  document.getElementById('recall-result').textContent = 'Querying GraphRAG engine...';
+  setTimeout(() => {
+    document.getElementById('recall-result').textContent = 'Connect the API at localhost:8000 to see real memory results. This is a UI template — memory retrieval will work when the backend is running.';
+  }, 1200);
+}
+
+// ── Init ──
+addLog('info', 'HarnessAgent Studio ready. Connect to API at localhost:8000');
+addLog('info', 'Using demo mode — start the backend with: make api && make worker');
+</script>
+</body>
+</html>

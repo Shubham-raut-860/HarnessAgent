@@ -12,6 +12,7 @@ Improvements over v1:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -71,7 +72,9 @@ class GraphRAGEngine:
         self._llm = llm_provider   # optional: used for NL entity extraction
         self._max_paths = max_rendered_paths
         # In-memory frequency counter: node_id -> access count
+        # Lock guards concurrent coroutine writes in the same event loop.
         self._node_freq: dict[str, int] = defaultdict(int)
+        self._freq_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,10 +134,11 @@ class GraphRAGEngine:
                 # Take top paths by score
                 top_paths = [sp.path for sp in scored[:self._max_paths]]
                 graph_paths = top_paths
-                # Update frequency counters
-                for path in graph_paths:
-                    for node in path.nodes:
-                        self._node_freq[node.id] += 1
+                # Update frequency counters (lock guards concurrent coroutine writes)
+                async with self._freq_lock:
+                    for path in graph_paths:
+                        for node in path.nodes:
+                            self._node_freq[node.id] += 1
                 graph_context = self._render_paths(graph_paths)
             except Exception as exc:
                 logger.warning("Graph traversal failed: %s", exc)
