@@ -1,1 +1,1 @@
-# Tests package for Codex Harness.
+# Tests package for HarnessAgent.

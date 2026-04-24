@@ -1,4 +1,4 @@
-"""Core contracts, configuration, and error types for Codex Harness."""
+"""Core contracts, configuration, and error types for HarnessAgent."""
 
 from harness.core.config import Settings, get_config
 from harness.core.context import (

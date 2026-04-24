@@ -1,4 +1,4 @@
-"""HermesLoop: orchestrates the full self-improvement cycle for Codex Harness agents."""
+"""HermesLoop: orchestrates the full self-improvement cycle for HarnessAgent agents."""
 
 from __future__ import annotations
 

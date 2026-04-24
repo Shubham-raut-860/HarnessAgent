@@ -1,4 +1,4 @@
-"""Base adapter contracts for framework integration with Codex Harness."""
+"""Base adapter contracts for framework integration with HarnessAgent."""
 
 from __future__ import annotations
 

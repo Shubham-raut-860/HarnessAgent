@@ -1,4 +1,4 @@
-"""Comprehensive pytest fixtures for Codex Harness test suite."""
+"""Comprehensive pytest fixtures for HarnessAgent test suite."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""PromptVersion dataclass and related schemas for Codex Harness."""
+"""PromptVersion dataclass and related schemas for HarnessAgent."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""CrewAI adapter — runs a Crew inside the Codex Harness lifecycle."""
+"""CrewAI adapter — runs a Crew inside the HarnessAgent lifecycle."""
 
 from __future__ import annotations
 

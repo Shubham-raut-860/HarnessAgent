@@ -1,4 +1,4 @@
-"""Safety pipeline factory for Codex Harness.
+"""Safety pipeline factory for HarnessAgent.
 
 Constructs Guardrail Pipeline instances with appropriate stages
 based on agent type and configuration.

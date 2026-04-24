@@ -1,4 +1,4 @@
-# Quickstart — Codex Harness
+# Quickstart — HarnessAgent
 
 > **Goal:** Have a running agent answering questions in under 15 minutes.
 > No prior experience with multi-agent systems required.
@@ -47,8 +47,8 @@ You have an Anthropic or OpenAI API key. This is the fastest route.
 ### Step 1 — Clone the repository
 
 ```bash
-git clone https://github.com/your-org/codex-harness.git
-cd codex-harness
+git clone https://github.com/your-org/harness-agent.git
+cd harness-agent
 ```
 
 ### Step 2 — Install Python dependencies
@@ -430,7 +430,7 @@ After running any agent, open **http://localhost:5000**.
 ```
 MLflow UI
 └── Experiments
-    └── codex-harness                    ← default experiment name
+    └── harness-agent                    ← default experiment name
         └── Run: run_abc123
             ├── Parameters
             │   ├── agent_type: sql

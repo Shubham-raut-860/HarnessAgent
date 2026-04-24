@@ -1,4 +1,4 @@
-"""Tools module for Codex Harness.
+"""Tools module for HarnessAgent.
 
 Exports the complete tool ecosystem: registry, MCP adapter, skill system,
 SQL tools, code tools, and file tools.

@@ -1,4 +1,4 @@
-"""Async circuit breaker implementation for Codex Harness."""
+"""Async circuit breaker implementation for HarnessAgent."""
 
 from __future__ import annotations
 

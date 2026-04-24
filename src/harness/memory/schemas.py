@@ -1,4 +1,4 @@
-"""Memory-related dataclasses for Codex Harness."""
+"""Memory-related dataclasses for HarnessAgent."""
 
 from __future__ import annotations
 

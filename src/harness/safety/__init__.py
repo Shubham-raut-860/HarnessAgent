@@ -1,4 +1,4 @@
-"""Safety module for Codex Harness.
+"""Safety module for HarnessAgent.
 
 Provides guardrail pipeline construction and per-tenant policy management.
 """

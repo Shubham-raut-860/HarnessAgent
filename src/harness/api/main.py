@@ -1,4 +1,4 @@
-"""FastAPI application factory for Codex Harness."""
+"""FastAPI application factory for HarnessAgent."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
         logger.debug("Prometheus metrics init: %s", exc)
         app.state.metrics = {}
 
-    logger.info("Codex Harness API started (env=%s)", cfg.environment)
+    logger.info("HarnessAgent API started (env=%s)", cfg.environment)
     yield
 
     # Shutdown cleanup
@@ -103,7 +103,7 @@ def create_app() -> FastAPI:
     cfg = get_config()
 
     app = FastAPI(
-        title="Codex Harness",
+        title="HarnessAgent",
         version="0.1.0",
         description="Production-grade multi-agent orchestration harness",
         docs_url="/docs",

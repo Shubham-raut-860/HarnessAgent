@@ -1,4 +1,4 @@
-"""Text chunker for Codex Harness — recursive splitting with overlap."""
+"""Text chunker for HarnessAgent — recursive splitting with overlap."""
 
 from __future__ import annotations
 

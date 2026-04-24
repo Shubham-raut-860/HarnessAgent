@@ -1,5 +1,5 @@
 # =============================================================================
-# Codex Harness — Model Provider Capabilities Configuration
+# HarnessAgent — Model Provider Capabilities Configuration
 # ${ENV_VAR} tokens are expanded at load time from the environment.
 # =============================================================================
 

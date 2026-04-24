@@ -1,4 +1,4 @@
-# Configuration Reference — Codex Harness
+# Configuration Reference — HarnessAgent
 
 > All runtime behaviour is controlled by environment variables.
 > No code changes are required to switch providers, backends, or feature flags.
@@ -228,9 +228,9 @@ MLFLOW_TRACKING_URI=http://localhost:5000
 # Default: "http://localhost:5000"
 # UI:      Open this URL in a browser to see all experiments and traces
 
-MLFLOW_EXPERIMENT_NAME=codex-harness
+MLFLOW_EXPERIMENT_NAME=harness-agent
 # Type:    string
-# Default: "codex-harness"
+# Default: "harness-agent"
 # Note:    All runs are grouped under this experiment name in the MLflow UI.
 #          Use different names to separate environments or projects.
 ```
@@ -243,9 +243,9 @@ OTEL_EXPORTER_ENDPOINT=http://localhost:4317
 # Default: "http://localhost:4317"
 # Use:     Any OTLP-compatible backend: Jaeger, Tempo, Honeycomb, Datadog, etc.
 
-OTEL_SERVICE_NAME=codex-harness
+OTEL_SERVICE_NAME=harness-agent
 # Type:    string
-# Default: "codex-harness"
+# Default: "harness-agent"
 # Note:    Appears as the service name in your tracing backend.
 #          Use a unique name per deployment environment.
 ```
@@ -472,7 +472,7 @@ GRAPH_BACKEND=networkx
 # Infrastructure
 REDIS_URL=redis://localhost:6379
 MLFLOW_TRACKING_URI=http://localhost:5000
-MLFLOW_EXPERIMENT_NAME=codex-harness-dev
+MLFLOW_EXPERIMENT_NAME=harness-agent-dev
 
 # Safety
 COST_BUDGET_USD_PER_TENANT=10.0
@@ -552,9 +552,9 @@ EMBEDDING_MODEL=all-MiniLM-L6-v2
 # Infrastructure
 REDIS_URL=redis://redis:6379
 MLFLOW_TRACKING_URI=http://mlflow:5000
-MLFLOW_EXPERIMENT_NAME=codex-harness-prod
+MLFLOW_EXPERIMENT_NAME=harness-agent-prod
 OTEL_EXPORTER_ENDPOINT=http://otel-collector:4317
-OTEL_SERVICE_NAME=codex-harness
+OTEL_SERVICE_NAME=harness-agent
 
 # Safety
 COST_BUDGET_USD_PER_TENANT=100.0
@@ -607,9 +607,9 @@ docker compose up -d
 | `EMBEDDING_MODEL` | string | `all-MiniLM-L6-v2` | sentence-transformers model |
 | `REDIS_URL` | string | `redis://localhost:6379` | Redis connection URL |
 | `MLFLOW_TRACKING_URI` | string | `http://localhost:5000` | MLflow server URL |
-| `MLFLOW_EXPERIMENT_NAME` | string | `codex-harness` | MLflow experiment name |
+| `MLFLOW_EXPERIMENT_NAME` | string | `harness-agent` | MLflow experiment name |
 | `OTEL_EXPORTER_ENDPOINT` | string | `http://localhost:4317` | OTLP gRPC endpoint |
-| `OTEL_SERVICE_NAME` | string | `codex-harness` | Service name in traces |
+| `OTEL_SERVICE_NAME` | string | `harness-agent` | Service name in traces |
 | `LOG_LEVEL` | enum | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 | `COST_BUDGET_USD_PER_TENANT` | float | `100.0` | Monthly spend cap per tenant |
 | `RATE_LIMIT_RPM` | int | `60` | Requests per minute per tenant |

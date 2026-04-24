@@ -1,4 +1,4 @@
-"""Error hierarchy and FailureClass enum for Codex Harness."""
+"""Error hierarchy and FailureClass enum for HarnessAgent."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ class FailureClass(str, Enum):
 
 
 class HarnessError(Exception):
-    """Base exception for all Codex Harness errors."""
+    """Base exception for all HarnessAgent errors."""
 
     def __init__(
         self,

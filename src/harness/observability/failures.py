@@ -1,4 +1,4 @@
-"""Failure tracking, classification, and sampling for Codex Harness."""
+"""Failure tracking, classification, and sampling for HarnessAgent."""
 
 from __future__ import annotations
 

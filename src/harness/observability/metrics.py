@@ -1,4 +1,4 @@
-"""Prometheus metrics definitions for Codex Harness."""
+"""Prometheus metrics definitions for HarnessAgent."""
 
 from __future__ import annotations
 

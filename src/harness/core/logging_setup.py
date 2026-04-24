@@ -1,4 +1,4 @@
-"""Local structured logging for Codex Harness.
+"""Local structured logging for HarnessAgent.
 
 All logs stay on disk only. Nothing is sent anywhere.
 Files written:

@@ -1,5 +1,5 @@
 # =============================================================================
-# Codex Harness — Full Infrastructure docker-compose
+# HarnessAgent — Full Infrastructure docker-compose
 # =============================================================================
 # Usage:
 #   docker compose up -d                     # Start core services
@@ -15,7 +15,7 @@ x-common-env: &common-env
   NEO4J_PASSWORD: harnesspassword
   MLFLOW_TRACKING_URI: http://mlflow:5000
   OTEL_EXPORTER_ENDPOINT: http://otel-collector:4317
-  OTEL_SERVICE_NAME: codex-harness
+  OTEL_SERVICE_NAME: harness-agent
   VECTOR_BACKEND: qdrant
   GRAPH_BACKEND: neo4j
   LOG_LEVEL: INFO

@@ -1,4 +1,4 @@
-"""OpenTelemetry tracing and Prometheus metrics setup for Codex Harness."""
+"""OpenTelemetry tracing and Prometheus metrics setup for HarnessAgent."""
 
 from __future__ import annotations
 

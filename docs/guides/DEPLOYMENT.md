@@ -1,6 +1,6 @@
-# Deployment Guide — Codex Harness
+# Deployment Guide — HarnessAgent
 
-> This guide covers running Codex Harness in environments beyond a developer laptop.
+> This guide covers running HarnessAgent in environments beyond a developer laptop.
 > It covers single-node Docker Compose deployments, scaling strategies, production
 > hardening, Kubernetes concepts, and backup/recovery procedures.
 
@@ -78,8 +78,8 @@ docker compose version
 ### Step 2 — Clone and configure
 
 ```bash
-git clone https://github.com/your-org/codex-harness.git
-cd codex-harness
+git clone https://github.com/your-org/harness-agent.git
+cd harness-agent
 cp .env.example .env
 ```
 
@@ -356,7 +356,7 @@ maintainable approach.
 ┌────────────────────────────────────────────────────────────────┐
 │                   Kubernetes Cluster                           │
 │                                                                │
-│  Namespace: codex-harness                                      │
+│  Namespace: harness-agent                                      │
 │                                                                │
 │  ┌─────────────────────────────────────────────────────────┐  │
 │  │ Deployments                                             │  │
@@ -392,7 +392,7 @@ Never store API keys in ConfigMaps. Use Kubernetes Secrets:
 
 ```bash
 kubectl create secret generic harness-secrets \
-  --namespace codex-harness \
+  --namespace harness-agent \
   --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
   --from-literal=JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))") \
   --from-literal=NEO4J_PASSWORD=strong-password
@@ -554,7 +554,7 @@ chmod +x scripts/backup.sh
 
 # Run daily at 2:00 AM
 crontab -e
-# Add: 0 2 * * * /path/to/codex-harness/scripts/backup.sh >> /var/log/harness-backup.log 2>&1
+# Add: 0 2 * * * /path/to/harness-agent/scripts/backup.sh >> /var/log/harness-backup.log 2>&1
 ```
 
 ---

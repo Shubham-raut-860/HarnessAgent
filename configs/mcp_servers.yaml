@@ -1,5 +1,5 @@
 # =============================================================================
-# Codex Harness — MCP Server Configurations
+# HarnessAgent — MCP Server Configurations
 # Each entry defines one MCP server the harness can connect to at startup.
 # ${ENV_VAR} tokens are expanded from the environment at load time.
 # =============================================================================

@@ -1,4 +1,4 @@
-"""LangGraph adapter — runs a StateGraph inside the Codex Harness lifecycle."""
+"""LangGraph adapter — runs a StateGraph inside the HarnessAgent lifecycle."""
 
 from __future__ import annotations
 

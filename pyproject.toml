@@ -3,10 +3,10 @@ requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "codex-harness"
+name = "harness-agent"
 version = "0.1.0"
 description = "Production-grade multi-agent harness with LLM routing, memory, tools, and observability"
-authors = ["Codex Team"]
+authors = ["thepradip"]
 readme = "README.md"
 packages = [{include = "harness", from = "src"}]
 

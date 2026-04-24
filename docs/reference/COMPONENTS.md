@@ -1,8 +1,8 @@
-# Codex Harness — Component Reference
+# HarnessAgent — Component Reference
 
 > **Style**: Azure Architecture Center  
 > **Audience**: Engineers, architects, and non-technical stakeholders  
-> **Purpose**: Authoritative reference for every major component in the Codex Harness multi-agent AI platform.
+> **Purpose**: Authoritative reference for every major component in the HarnessAgent multi-agent AI platform.
 
 ---
 
@@ -1065,7 +1065,7 @@ while True:
 
 ## 15. Framework Adapters
 
-**What it does** Wraps third-party multi-agent frameworks (LangGraph, AutoGen, CrewAI) inside the Codex Harness lifecycle, emitting standard `StepEvent` objects for every framework-specific action so full observability and budget enforcement apply regardless of the underlying framework.
+**What it does** Wraps third-party multi-agent frameworks (LangGraph, AutoGen, CrewAI) inside the HarnessAgent lifecycle, emitting standard `StepEvent` objects for every framework-specific action so full observability and budget enforcement apply regardless of the underlying framework.
 
 **File**: `src/harness/adapters/langgraph.py`, `autogen.py`, `crewai.py`  
 **Key classes**: `LangGraphAdapter`, `AutoGenAdapter`, `CrewAIAdapter`  
@@ -1167,7 +1167,7 @@ When `mlflow` is not installed, all methods yield a `_NoOpSpan` that ignores all
 | Constructor argument | Description |
 |---|---|
 | `tracking_uri` | MLflow tracking server URI (e.g., `http://localhost:5000`) |
-| `experiment_name` | MLflow experiment name (e.g., `"codex-harness"`) |
+| `experiment_name` | MLflow experiment name (e.g., `"harness-agent"`) |
 
 ---
 

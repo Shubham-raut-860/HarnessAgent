@@ -1,4 +1,4 @@
-"""Agents module for Codex Harness.
+"""Agents module for HarnessAgent.
 
 Provides BaseAgent, SQLAgent, and CodeAgent with full production lifecycle.
 """

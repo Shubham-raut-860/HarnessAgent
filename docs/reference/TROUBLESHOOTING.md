@@ -1,8 +1,8 @@
-# Codex Harness — Troubleshooting Guide
+# HarnessAgent — Troubleshooting Guide
 
 > **Style**: Azure Architecture Center  
 > **Audience**: Platform engineers, SREs, and on-call operators  
-> **Purpose**: Diagnose and resolve the most common production issues in the Codex Harness, with concrete commands, root causes, and fixes.
+> **Purpose**: Diagnose and resolve the most common production issues in the HarnessAgent, with concrete commands, root causes, and fixes.
 
 ---
 
@@ -433,7 +433,7 @@ curl http://localhost:8000/runs/{run_id} | jq '.result.mlflow_run_id'
 
 # Open MLflow UI
 open http://localhost:5000
-# Navigate to: Experiments → codex-harness → find the run by name (sql_{run_id[:8]})
+# Navigate to: Experiments → harness-agent → find the run by name (sql_{run_id[:8]})
 ```
 
 ### What each span type means

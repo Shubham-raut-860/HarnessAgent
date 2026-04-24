@@ -1,8 +1,8 @@
-# 🏗️ Codex Harness — Architecture Overview
+# 🏗️ HarnessAgent — Architecture Overview
 
 > **Azure Architecture Center Style | Last Updated: April 2026**
 >
-> This document is the authoritative deep-dive into how Codex Harness works internally. It is written for two audiences: **non-technical managers** who need to understand what the system does and why it is built this way, and **senior engineers** who need to understand every component well enough to extend, debug, or operate it in production.
+> This document is the authoritative deep-dive into how HarnessAgent works internally. It is written for two audiences: **non-technical managers** who need to understand what the system does and why it is built this way, and **senior engineers** who need to understand every component well enough to extend, debug, or operate it in production.
 
 ---
 
@@ -22,18 +22,18 @@
 
 ## 1. System Context (C4 Level 1)
 
-**For managers:** This diagram shows who uses Codex Harness and what external services it connects to. Think of it as a map of the neighborhood — Codex Harness sits in the middle, and all the roads show who talks to it and what it talks to.
+**For managers:** This diagram shows who uses HarnessAgent and what external services it connects to. Think of it as a map of the neighborhood — HarnessAgent sits in the middle, and all the roads show who talks to it and what it talks to.
 
 **For engineers:** C4 Level 1 context. The harness is a single deployable system boundary. All LLM calls go out over HTTPS to cloud APIs or stay on-prem via local endpoints. The target database (for SQL Agent) and MCP servers are external dependencies.
 
 ```mermaid
 C4Context
-  title Codex Harness — System Context
+  title HarnessAgent — System Context
 
   Person(dev, "Developer / Data Scientist", "Builds agents, views traces, tunes prompts, reviews Hermes patches")
   Person(enduser, "End User / Analyst", "Asks questions in natural language, approves HITL requests")
 
-  System(harness, "Codex Harness", "Multi-agent AI execution platform. Runs LLM agents with memory, tools, safety guardrails, and self-improvement.")
+  System(harness, "HarnessAgent", "Multi-agent AI execution platform. Runs LLM agents with memory, tools, safety guardrails, and self-improvement.")
 
   System_Ext(anthropic, "Anthropic API", "Claude Sonnet 4.6 / Haiku 4.5 / Opus 4.7")
   System_Ext(openai, "OpenAI API", "GPT-4o / GPT-5 / o4-mini")
@@ -69,7 +69,7 @@ C4Context
 
 ```mermaid
 C4Container
-  title Codex Harness — Container Diagram
+  title HarnessAgent — Container Diagram
 
   Person(dev, "Developer")
 
@@ -83,7 +83,7 @@ C4Container
   ContainerDb(mlflow, "MLflow 2.18", "Experiment tracker", "Agent run traces, step-level spans, token counts, cost, eval metrics. UI at :5000.")
   Container(otel, "OTel Collector", "OpenTelemetry Contrib", "Receives OTLP gRPC spans from all app containers. Exports to Prometheus scrape endpoint (:8889).")
   ContainerDb(prometheus, "Prometheus 2.51", "Time-series metrics DB", "Scrapes OTel collector and app /metrics endpoints. 30-day retention.")
-  Container(grafana, "Grafana 10.4", "Dashboards", "Pre-built Codex Harness dashboard. Reads from Prometheus. UI at :3000.")
+  Container(grafana, "Grafana 10.4", "Dashboards", "Pre-built HarnessAgent dashboard. Reads from Prometheus. UI at :3000.")
 
   Rel(dev, api, "REST calls (HTTPS / HTTP)")
   Rel(api, redis, "Set run state, enqueue RQ job, publish events")
@@ -549,7 +549,7 @@ flowchart LR
 
 ## 9. Deployment Architecture
 
-**For managers:** This diagram shows the full set of services that run when you start Codex Harness. Each box represents a running program. The arrows show which programs must start before others (dependencies). The ports show where you can access each service in your browser or via API calls.
+**For managers:** This diagram shows the full set of services that run when you start HarnessAgent. Each box represents a running program. The arrows show which programs must start before others (dependencies). The ports show where you can access each service in your browser or via API calls.
 
 **For engineers:** Docker Compose orchestrates all services on the `harness-net` bridge network (subnet `172.20.0.0/16`). Health checks gate startup order: `worker` and `hermes` wait for `api` (healthy), which waits for `redis` and `qdrant` (healthy). The `api` and `worker` containers share the same image (multi-stage Dockerfile). `worker` runs with `deploy.replicas: 2` for parallel job processing.
 

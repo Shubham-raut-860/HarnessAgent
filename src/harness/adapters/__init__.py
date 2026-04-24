@@ -1,4 +1,4 @@
-"""Framework adapters for Codex Harness.
+"""Framework adapters for HarnessAgent.
 
 Each adapter wraps an external multi-agent framework so it can execute inside
 the harness lifecycle and receive observability, memory, safety, and cost

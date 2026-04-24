@@ -1,4 +1,4 @@
-"""AgentContext and core data-transfer dataclasses for Codex Harness."""
+"""AgentContext and core data-transfer dataclasses for HarnessAgent."""
 
 from __future__ import annotations
 

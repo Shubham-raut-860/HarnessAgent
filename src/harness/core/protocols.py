@@ -1,4 +1,4 @@
-"""Structural Protocol ABCs and supporting dataclasses for Codex Harness."""
+"""Structural Protocol ABCs and supporting dataclasses for HarnessAgent."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""OpenTelemetry step tracer for Codex Harness."""
+"""OpenTelemetry step tracer for HarnessAgent."""
 
 from __future__ import annotations
 

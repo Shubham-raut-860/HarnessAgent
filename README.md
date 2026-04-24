@@ -1,4 +1,4 @@
-# 🧠 Codex Harness
+# 🧠 HarnessAgent
 
 Run SQL agents, code assistants, or research bots on any LLM. Bring your own framework. Memory, safety, and failure recovery come included.
 
@@ -14,7 +14,7 @@ Run SQL agents, code assistants, or research bots on any LLM. Bring your own fra
 
 Think about what actually happens when you run an AI agent in production. The LLM call needs to work. It needs to not cost $500 a day. It needs to not loop forever when the API is slow. It needs to remember context from three messages ago. It needs to not crash your app when one provider goes down.
 
-Codex Harness handles all of that. You write the task. It handles the rest.
+HarnessAgent handles all of that. You write the task. It handles the rest.
 
 | What you see | What happens under the hood |
 |---|---|
@@ -36,7 +36,7 @@ graph TB
         API[REST API POST /runs]
     end
 
-    subgraph HARNESS["⚙️ Codex Harness Core"]
+    subgraph HARNESS["⚙️ HarnessAgent Core"]
         RUNNER[AgentRunner lifecycle manager]
 
         subgraph AGENTS["🤖 Agent Layer"]
@@ -312,7 +312,28 @@ Current: **96 unit tests passing, 0 failures**.
 - [Component Reference](docs/reference/COMPONENTS.md) — all 17 components documented
 - [Code Walkthrough](docs/reference/CODE_WALKTHROUGH.md) — follow a request through the actual code
 - [Troubleshooting](docs/reference/TROUBLESHOOTING.md) — common issues and fixes
-- [HTML Docs](docs/codex-harness-docs.html) — open in browser, click Export PDF for a printable version
+- [HTML Docs](docs/harness-agent-docs.html) — open in browser, click Export PDF for a printable version
+
+---
+
+## Future Scope
+
+Planned improvements focused on making HarnessAgent more efficient at scale.
+
+| Area | Feature | Expected Impact |
+|---|---|---|
+| **Token Efficiency** | Adaptive context compression — summarize stale history with a small model before appending to new prompts | 40–60% token reduction on long sessions |
+| **Cost Optimization** | Semantic response caching — skip LLM calls when a sufficiently similar query was answered recently | Up to 30% cost savings on repetitive workloads |
+| **Cost Optimization** | Batch inference mode — route low-urgency tasks through Anthropic/OpenAI Batch APIs at 50% list price | 50% cost reduction for async pipelines |
+| **Routing** | ML-based predictive model selection — learn per-task-type patterns to auto-select the cheapest sufficient model | Eliminates over-provisioned Opus/GPT-5 usage |
+| **Memory** | Differential re-indexing — re-embed only modified chunks on ingestion, not the full corpus | Faster incremental ingestion at scale |
+| **Parallelism** | Streaming pipeline overlap — start tool execution while the LLM is still generating, cut latency per step | Lower end-to-end agent step latency |
+| **Multi-Agent** | Shared tool execution pool — deduplicate identical tool calls across concurrent agents in the same run | Fewer redundant DB and API round-trips |
+| **Hermes** | Cost-aware patch targeting — rank prompt candidates by token spend, optimize the most expensive patterns first | Better ROI from self-improvement cycles |
+| **Scheduling** | Fair-share multi-tenant scheduler — priority queues and resource caps to prevent noisy-neighbor budget spikes | Predictable per-tenant cost and latency |
+| **Extensibility** | Plugin SDK — first-class API for registering custom LLM providers, memory backends, and tool namespaces | Faster integration of new models and datastores |
+| **Observability** | Automated cost anomaly alerts — Prometheus rule + Grafana annotation when a run exceeds per-step cost threshold | Catch runaway agents before they exhaust budgets |
+| **Safety** | Streaming guardrail evaluation — evaluate guardrail rules token-by-token instead of waiting for full output | Interrupt unsafe responses earlier, reduce wasted tokens |
 
 ---
 

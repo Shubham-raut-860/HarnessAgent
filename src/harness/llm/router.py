@@ -1,4 +1,4 @@
-"""Health-aware, context-window-aware LLM provider router for Codex Harness."""
+"""Health-aware, context-window-aware LLM provider router for HarnessAgent."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Per-tenant policy overrides for Codex Harness.
+"""Per-tenant policy overrides for HarnessAgent.
 
 Policies control budget limits, allowed agent types, tool restrictions,
 PII handling, and HITL requirements on a per-tenant basis.

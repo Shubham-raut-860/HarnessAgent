@@ -1,4 +1,4 @@
-"""OpenAI API provider for Codex Harness.
+"""OpenAI API provider for HarnessAgent.
 
 Supports: gpt-4o, gpt-4o-mini, o1, o1-mini, o3, o3-mini, o4-mini,
           gpt-4.5, gpt-5 (and any future model via provider_name/model config).

@@ -1,4 +1,4 @@
-"""Anthropic Claude provider adapter for Codex Harness."""
+"""Anthropic Claude provider adapter for HarnessAgent."""
 
 from __future__ import annotations
 

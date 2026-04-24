@@ -1,4 +1,4 @@
-"""EvalDataset and EvalCase definitions for Codex Harness evaluation."""
+"""EvalDataset and EvalCase definitions for HarnessAgent evaluation."""
 
 from __future__ import annotations
 

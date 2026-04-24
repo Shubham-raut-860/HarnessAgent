@@ -1,4 +1,4 @@
-"""Pydantic-settings configuration for Codex Harness."""
+"""Pydantic-settings configuration for HarnessAgent."""
 
 from __future__ import annotations
 
@@ -55,13 +55,13 @@ class Settings(BaseSettings):
     # MLflow
     # -------------------------------------------------------------------------
     mlflow_tracking_uri: str = "http://localhost:5000"
-    mlflow_experiment_name: str = "codex-harness"
+    mlflow_experiment_name: str = "harness-agent"
 
     # -------------------------------------------------------------------------
     # OpenTelemetry
     # -------------------------------------------------------------------------
     otel_exporter_endpoint: str = "http://localhost:4317"
-    otel_service_name: str = "codex-harness"
+    otel_service_name: str = "harness-agent"
 
     # -------------------------------------------------------------------------
     # LLM Defaults

@@ -1,4 +1,4 @@
-"""Production SQL tools for Codex Harness agents.
+"""Production SQL tools for HarnessAgent agents.
 
 All tools are read-only by default. Connection pool is shared across tool instances.
 """

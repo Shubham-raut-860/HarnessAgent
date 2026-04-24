@@ -1,4 +1,4 @@
-# Codex Harness — Code Walkthrough
+# HarnessAgent — Code Walkthrough
 
 > **Style**: Azure Architecture Center  
 > **Audience**: Software engineers new to the codebase  

@@ -1,4 +1,4 @@
-"""Eval module for Codex Harness — dataset, runner, scorers, and reports."""
+"""Eval module for HarnessAgent — dataset, runner, scorers, and reports."""
 
 from harness.eval.datasets import (
     EvalCase,

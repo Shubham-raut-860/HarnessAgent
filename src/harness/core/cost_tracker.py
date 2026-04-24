@@ -1,4 +1,4 @@
-"""LLM cost tracking with per-tenant budget enforcement for Codex Harness."""
+"""LLM cost tracking with per-tenant budget enforcement for HarnessAgent."""
 
 from __future__ import annotations
 

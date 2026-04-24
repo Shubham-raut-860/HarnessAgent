@@ -1,4 +1,4 @@
-"""FastAPI dependency injection for Codex Harness."""
+"""FastAPI dependency injection for HarnessAgent."""
 
 from __future__ import annotations
 

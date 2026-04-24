@@ -1,4 +1,4 @@
-"""Code execution and analysis tools for Codex Harness agents."""
+"""Code execution and analysis tools for HarnessAgent agents."""
 
 from __future__ import annotations
 

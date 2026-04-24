@@ -1,4 +1,4 @@
-"""Custom middleware for Codex Harness API."""
+"""Custom middleware for HarnessAgent API."""
 
 from __future__ import annotations
 

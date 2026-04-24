@@ -1,4 +1,4 @@
-"""Redis sliding-window rate limiter and FastAPI middleware for Codex Harness."""
+"""Redis sliding-window rate limiter and FastAPI middleware for HarnessAgent."""
 
 from __future__ import annotations
 

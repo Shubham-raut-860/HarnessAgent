@@ -1,4 +1,4 @@
-"""File I/O tools for Codex Harness agents.
+"""File I/O tools for HarnessAgent agents.
 
 All operations are workspace-scoped — path traversal outside the workspace
 is rejected. Writes are atomic (temp file + rename).
