@@ -33,8 +33,10 @@ logger = logging.getLogger(__name__)
 # How often (in steps) to save a checkpoint
 _CHECKPOINT_INTERVAL = 10
 
-# Maximum history messages to keep in context
+# Summarize history when it grows beyond this length
 _MAX_HISTORY_MESSAGES = 40
+# Keep this many recent messages verbatim after summarization
+_RECENT_MESSAGES_KEEP = 20
 
 # Directory for per-run logs and conversation history (gitignored)
 _LOG_DIR = Path("logs")
@@ -603,11 +605,83 @@ class BaseAgent:
         ctx: AgentContext,
         history: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Trim history to fit within the context window budget."""
+        """Trim history to fit within the context window budget.
+
+        When history exceeds _MAX_HISTORY_MESSAGES, the older portion is
+        summarized via LLM call and replaced with a single summary message.
+        Keeps the last _RECENT_MESSAGES_KEEP messages verbatim.
+        Falls back to a naive slice if summarization fails.
+        """
         if len(history) <= _MAX_HISTORY_MESSAGES:
             return history
-        # Keep system-level messages and recent messages
-        # Always keep the last N messages
+
+        recent = history[-_RECENT_MESSAGES_KEEP:]
+        older = history[:-_RECENT_MESSAGES_KEEP]
+
+        # Try memory manager's fit_history first (most efficient path)
+        if ctx.memory is not None and hasattr(ctx.memory, "fit_history"):
+            try:
+                fit_result = await ctx.memory.fit_history(
+                    run_id=ctx.run_id,
+                    history=older,
+                    keep_last=0,
+                )
+                summary_text = getattr(fit_result, "summary", None)
+                if summary_text:
+                    logger.info(
+                        "Run %s: summarized %d messages via memory manager",
+                        ctx.run_id,
+                        len(older),
+                    )
+                    return [
+                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"}
+                    ] + recent
+            except Exception as exc:
+                logger.debug("memory.fit_history failed: %s", exc)
+
+        # Try LLM summarization directly
+        try:
+            turns_text = "\n".join(
+                f"{m['role'].upper()}: {m.get('content', '')[:500]}"
+                for m in older
+                if isinstance(m.get("content"), str)
+            )
+            if turns_text:
+                summary_response = await self._llm_router.complete(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": (
+                                "Summarize the following conversation history concisely "
+                                "in 3-5 sentences, preserving key decisions, findings, "
+                                "and tool call outcomes:\n\n" + turns_text
+                            ),
+                        }
+                    ],
+                    system="You are a helpful assistant that summarizes conversations concisely.",
+                    max_tokens=512,
+                )
+                summary_text = summary_response.content.strip()
+                if summary_text:
+                    logger.info(
+                        "Run %s: summarized %d messages via LLM (%d tokens)",
+                        ctx.run_id,
+                        len(older),
+                        summary_response.output_tokens,
+                    )
+                    return [
+                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"}
+                    ] + recent
+        except Exception as exc:
+            logger.debug("LLM history summarization failed: %s", exc)
+
+        # Fallback: naive slice
+        logger.debug(
+            "Run %s: falling back to naive history slice (%d → %d messages)",
+            ctx.run_id,
+            len(history),
+            _MAX_HISTORY_MESSAGES,
+        )
         return history[-_MAX_HISTORY_MESSAGES:]
 
     # ------------------------------------------------------------------
