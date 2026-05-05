@@ -253,6 +253,133 @@ class MLflowAgentTracer:
         return metrics
 
     # ------------------------------------------------------------------
+    # LLM call logging  (called from BaseAgent per step)
+    # ------------------------------------------------------------------
+
+    async def log_llm_call(
+        self,
+        run_id: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> None:
+        """Append token-usage metrics to the active MLflow run for *run_id*."""
+        if not _MLFLOW_AVAILABLE:
+            return
+        mlflow_run_id = self._active_run_ids.get(run_id)
+        if not mlflow_run_id:
+            return
+        try:
+            from harness.core.cost_tracker import _model_cost_usd
+            cost = _model_cost_usd(model, input_tokens, output_tokens)
+            client = mlflow.tracking.MlflowClient()
+            client.log_metric(mlflow_run_id, "llm_input_tokens", float(input_tokens))
+            client.log_metric(mlflow_run_id, "llm_output_tokens", float(output_tokens))
+            client.log_metric(mlflow_run_id, "llm_cost_usd", cost)
+        except Exception as exc:
+            logger.debug("log_llm_call failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Hermes cycle logging  (one MLflow run per improvement cycle)
+    # ------------------------------------------------------------------
+
+    async def log_hermes_cycle(
+        self,
+        agent_type: str,
+        patch_id: str,
+        score: float,
+        applied: bool,
+        errors_sampled: int,
+        reason: str,
+        eval_successes: int = 0,
+        eval_total: int = 0,
+        rolled_back: bool = False,
+    ) -> None:
+        """Log one Hermes improvement cycle to experiment 'harness_hermes_{agent_type}'."""
+        if not _MLFLOW_AVAILABLE:
+            return
+        try:
+            mlflow.set_experiment(f"harness_hermes_{agent_type}")
+            with mlflow.start_run(run_name=f"cycle_{patch_id[:8]}"):
+                mlflow.log_params({
+                    "agent_type": agent_type,
+                    "patch_id": patch_id,
+                    "applied": str(applied),
+                    "rolled_back": str(rolled_back),
+                    "reason": reason[:500],
+                })
+                mlflow.log_metrics({
+                    "patch_score": float(score),
+                    "errors_sampled": float(errors_sampled),
+                    "eval_success_rate": float(eval_successes) / max(eval_total, 1),
+                    "eval_total": float(eval_total),
+                })
+        except Exception as exc:
+            logger.debug("log_hermes_cycle failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Online performance logging  (rolling window metrics per version)
+    # ------------------------------------------------------------------
+
+    async def log_online_metrics(
+        self,
+        agent_type: str,
+        version_id: str,
+        version_number: int,
+        success_rate: float,
+        avg_cost: float,
+        avg_steps: float,
+        sample_count: int,
+    ) -> None:
+        """Log rolling performance metrics to experiment 'harness_online_{agent_type}'."""
+        if not _MLFLOW_AVAILABLE:
+            return
+        try:
+            mlflow.set_experiment(f"harness_online_{agent_type}")
+            with mlflow.start_run(run_name=f"v{version_number}_{version_id[:8]}"):
+                mlflow.log_params({
+                    "agent_type": agent_type,
+                    "version_id": version_id,
+                    "version_number": str(version_number),
+                })
+                mlflow.log_metrics({
+                    "success_rate": float(success_rate),
+                    "avg_cost_usd": float(avg_cost),
+                    "avg_steps": float(avg_steps),
+                    "sample_count": float(sample_count),
+                })
+        except Exception as exc:
+            logger.debug("log_online_metrics failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Prompt version logging  (change events)
+    # ------------------------------------------------------------------
+
+    async def log_prompt_version(
+        self,
+        agent_type: str,
+        version_id: str,
+        version_number: int,
+        created_by: str,
+        patch_id: str | None = None,
+    ) -> None:
+        """Log a prompt version change to experiment 'harness_prompts_{agent_type}'."""
+        if not _MLFLOW_AVAILABLE:
+            return
+        try:
+            mlflow.set_experiment(f"harness_prompts_{agent_type}")
+            with mlflow.start_run(run_name=f"v{version_number}_{version_id[:8]}"):
+                mlflow.log_params({
+                    "agent_type": agent_type,
+                    "version_id": version_id,
+                    "version_number": str(version_number),
+                    "created_by": created_by,
+                    "patch_id": patch_id or "",
+                })
+        except Exception as exc:
+            logger.debug("log_prompt_version failed: %s", exc)
+
+    # ------------------------------------------------------------------
     # Trace retrieval
     # ------------------------------------------------------------------
 
