@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import signal
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -127,6 +128,90 @@ class AgentRunner:
         self._workspace_base = Path(workspace_base)
         self._event_bus = event_bus
         self._error_collector = error_collector
+        self._shutting_down: bool = False
+        self._inflight: set[str] = set()
+
+    # ------------------------------------------------------------------
+    # Graceful shutdown
+    # ------------------------------------------------------------------
+
+    def setup_signal_handling(self) -> None:
+        """Register SIGTERM/SIGINT handlers for graceful shutdown.
+
+        Call once from within a running event loop (e.g. at app startup).
+        On Windows, add_signal_handler is not supported — the call is a no-op.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            loop.add_signal_handler(signal.SIGTERM, self._request_shutdown)
+            loop.add_signal_handler(signal.SIGINT, self._request_shutdown)
+            logger.info("AgentRunner: SIGTERM/SIGINT handlers registered")
+        except (NotImplementedError, RuntimeError) as exc:
+            logger.warning("AgentRunner: could not register signal handlers: %s", exc)
+
+    def _request_shutdown(self) -> None:
+        """Set the shutdown flag — no new runs will be started."""
+        if not self._shutting_down:
+            logger.info(
+                "AgentRunner: shutdown requested — %d run(s) in flight",
+                len(self._inflight),
+            )
+        self._shutting_down = True
+
+    async def shutdown(self, drain_timeout: float = 30.0) -> None:
+        """Set shutdown flag and wait up to drain_timeout for in-flight runs.
+
+        Any run still active after the timeout is marked 'failed' in Redis
+        with error_message='Run interrupted by graceful shutdown'.
+
+        Args:
+            drain_timeout: Seconds to wait before force-marking stragglers.
+        """
+        self._request_shutdown()
+
+        if not self._inflight:
+            logger.info("AgentRunner: no in-flight runs — clean shutdown")
+            return
+
+        logger.info(
+            "AgentRunner: draining %d in-flight run(s) (timeout=%.1fs)...",
+            len(self._inflight),
+            drain_timeout,
+        )
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + drain_timeout
+        while self._inflight:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(1.0, remaining))
+
+        if self._inflight:
+            logger.warning(
+                "AgentRunner: drain timeout — interrupting %d run(s): %s",
+                len(self._inflight),
+                list(self._inflight),
+            )
+            for run_id in list(self._inflight):
+                try:
+                    record = await self.get_run(run_id)
+                    if record and record.status == "running":
+                        record.status = "failed"
+                        record.result = {
+                            "run_id": run_id,
+                            "output": "",
+                            "steps": 0,
+                            "tokens": 0,
+                            "success": False,
+                            "error_message": "Run interrupted by graceful shutdown",
+                        }
+                        record.completed_at = datetime.now(timezone.utc)
+                        await self.update_run(record)
+                except Exception as exc:
+                    logger.debug("Could not mark run %s interrupted: %s", run_id, exc)
+            self._inflight.clear()
+        else:
+            logger.info("AgentRunner: all in-flight runs completed — clean shutdown")
 
     # ------------------------------------------------------------------
     # CRUD
@@ -223,10 +308,19 @@ class AgentRunner:
             logger.info("Skipping cancelled run %s", run_id)
             return record
 
-        # Mark as running
+        # Reject new runs during shutdown
+        if self._shutting_down:
+            logger.warning("Rejecting run %s — shutdown in progress", run_id)
+            record.status = "cancelled"
+            record.completed_at = datetime.now(timezone.utc)
+            await self.update_run(record)
+            return record
+
+        # Mark as running and track as in-flight
         record.status = "running"
         record.started_at = datetime.now(timezone.utc)
         await self.update_run(record)
+        self._inflight.add(run_id)
 
         workspace = self._workspace_base / record.tenant_id / record.run_id
         workspace.mkdir(parents=True, exist_ok=True)
@@ -265,6 +359,9 @@ class AgentRunner:
                     )
                 except Exception:
                     pass
+
+        finally:
+            self._inflight.discard(run_id)
 
         record.completed_at = datetime.now(timezone.utc)
         await self.update_run(record)
