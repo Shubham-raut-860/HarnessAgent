@@ -28,6 +28,22 @@ class RateLimitResult:
     retry_after: float
 
 
+def _parse_entry_cost(member: bytes | str) -> float:
+    """Parse the cost encoded in a sorted-set member string.
+
+    Members are stored as '{timestamp}:{id}:{cost}'.
+    Returns 1.0 for legacy entries that lack the cost field.
+    """
+    try:
+        raw = member.decode() if isinstance(member, bytes) else member
+        parts = raw.split(":")
+        if len(parts) >= 3:
+            return float(parts[2])
+    except (ValueError, AttributeError, IndexError):
+        pass
+    return 1.0
+
+
 class RateLimiter:
     """Sliding-window rate limiter backed by Redis sorted sets."""
 
@@ -62,19 +78,20 @@ class RateLimiter:
         pipe = self._redis.pipeline(transaction=True)
         # Remove expired entries
         pipe.zremrangebyscore(key, "-inf", window_start)
-        # Count current window requests weighted by cost
+        # Fetch current window entries with their scores
         pipe.zrange(key, 0, -1, withscores=True)
-        # Add the new request with current timestamp as score
-        pipe.zadd(key, {f"{now}:{id(object())}": now})
+        # Add the new request — encode cost in the member so we can sum it later
+        pipe.zadd(key, {f"{now}:{id(object())}:{cost}": now})
         # Set TTL on the key
         pipe.expire(key, self.window_seconds * 2)
         results: list[Any] = await pipe.execute()
 
-        # results[1] is list of (member, score) pairs
+        # results[1] is list of (member, score) pairs — sum actual costs
         window_entries: list[tuple[bytes, float]] = results[1]
-        current_cost = sum(1.0 for _ in window_entries)
+        current_cost = sum(_parse_entry_cost(m) for m, _ in window_entries)
 
-        if current_cost + cost - 1 >= effective_limit:
+        # Block if adding this request's cost would exceed the limit
+        if current_cost + cost > effective_limit:
             # Undo the zadd we just did
             await self._redis.zremrangebyscore(key, now, now + 0.001)
             oldest_score = window_entries[0][1] if window_entries else now
@@ -86,7 +103,7 @@ class RateLimiter:
                 retry_after=retry_after,
             )
 
-        remaining = max(0, effective_limit - int(current_cost + cost))
+        remaining = max(0, int(effective_limit - (current_cost + cost)))
         return RateLimitResult(
             allowed=True,
             remaining=remaining,
