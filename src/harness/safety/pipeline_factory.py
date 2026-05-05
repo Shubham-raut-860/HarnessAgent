@@ -48,10 +48,10 @@ def build_pipeline(
         from guardrail.pipeline import Pipeline, Stage
     except ImportError:
         logger.warning(
-            "guardrail package not installed — returning NullPipeline for agent_type=%s",
+            "guardrail package not installed — using HardConstraintPipeline for agent_type=%s",
             agent_type,
         )
-        return _NullPipeline()
+        return _HardConstraintPipeline(blocked_tools=config.blocked_tools)
 
     input_stages: list[Any] = []
     intermediate_stages: list[Any] = []
@@ -194,28 +194,88 @@ def get_default_config(agent_type: str) -> SafetyConfig:
 
 
 # ---------------------------------------------------------------------------
-# Null implementation for when guardrail is unavailable
+# Hard-constraint fallback for when guardrail is unavailable
 # ---------------------------------------------------------------------------
 
-class _NullGuardResult:
-    """Stub GuardResult that always allows the call through."""
+import re as _re
 
-    blocked: bool = False
-    reason: str = ""
-    decision: str = "allow"
+_INJECTION_PATTERNS = [
+    _re.compile(r"ignore\s+(all\s+)?previous\s+instructions", _re.I),
+    _re.compile(r"forget\s+your\s+(system\s+)?instructions", _re.I),
+    _re.compile(r"you\s+are\s+now\s+(a\s+different|DAN|an?\s+unrestricted)", _re.I),
+    _re.compile(r"act\s+as\s+if\s+you\s+have\s+no\s+restrictions", _re.I),
+    _re.compile(r"jailbreak", _re.I),
+    _re.compile(r"prompt\s+injection", _re.I),
+    _re.compile(r"</?(system|SYSTEM)>", _re.I),
+]
+
+_PII_PATTERNS = [
+    (_re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN REDACTED]"),
+    (_re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "[EMAIL REDACTED]"),
+    (_re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b"), "[PHONE REDACTED]"),
+    (_re.compile(r"\b4[0-9]{12}(?:[0-9]{3})?\b"), "[CARD REDACTED]"),
+]
 
 
-class _NullPipeline:
-    """Fallback pipeline that passes all checks when guardrail is not installed."""
+class _GuardResult:
+    """Minimal GuardResult returned by _HardConstraintPipeline."""
 
-    async def check_input(self, payload: Any) -> _NullGuardResult:
-        return _NullGuardResult()
+    def __init__(self, blocked: bool, reason: str = "") -> None:
+        self.blocked = blocked
+        self.reason = reason
+        self.decision = "block" if blocked else "allow"
 
-    async def check_step(self, payload: Any) -> _NullGuardResult:
-        return _NullGuardResult()
 
-    async def check_output(self, payload: Any) -> _NullGuardResult:
-        return _NullGuardResult()
+class _HardConstraintPipeline:
+    """Minimal safety pipeline used when the guardrail package is not installed.
+
+    Provides three layers of protection with zero external dependencies:
+    - Input: regex-based prompt-injection detection
+    - Step: blocked tool-name enforcement
+    - Output: regex-based PII redaction
+    """
+
+    def __init__(self, blocked_tools: list[str] | None = None) -> None:
+        self._blocked_tools: set[str] = set(blocked_tools or [])
+
+    async def check_input(self, payload: Any) -> _GuardResult:
+        content = ""
+        if isinstance(payload, dict):
+            content = str(payload.get("content", payload.get("query", "")))
+        elif isinstance(payload, str):
+            content = payload
+
+        for pattern in _INJECTION_PATTERNS:
+            if pattern.search(content):
+                logger.warning(
+                    "HardConstraintPipeline: prompt injection detected: %r",
+                    content[:120],
+                )
+                return _GuardResult(
+                    blocked=True,
+                    reason=f"Prompt injection pattern detected: {pattern.pattern}",
+                )
+        return _GuardResult(blocked=False)
+
+    async def check_step(self, payload: Any) -> _GuardResult:
+        tool_name = ""
+        if isinstance(payload, dict):
+            tool_name = str(payload.get("tool_name", payload.get("tool", "")))
+        elif hasattr(payload, "name"):
+            tool_name = payload.name
+
+        if tool_name and tool_name in self._blocked_tools:
+            return _GuardResult(
+                blocked=True,
+                reason=f"Tool '{tool_name}' is in the blocked list",
+            )
+        return _GuardResult(blocked=False)
+
+    async def check_output(self, payload: Any) -> _GuardResult:
+        return _GuardResult(blocked=False)
 
     def redact(self, text: str) -> str:
+        """Redact common PII patterns from text."""
+        for pattern, replacement in _PII_PATTERNS:
+            text = pattern.sub(replacement, text)
         return text
