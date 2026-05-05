@@ -19,21 +19,32 @@ class Scheduler:
     Independent tasks (no dependency relationship) are executed concurrently
     with asyncio.gather(). As tasks complete their results are passed to
     dependents via metadata.
+
+    Production features:
+    - Back-pressure via max_concurrent semaphore
+    - Per-subtask retry (max_retries attempts on transient failure)
+    - Dependency-failure propagation: tasks whose deps failed are skipped
     """
 
     def __init__(
         self,
         agent_runner: Any,
         message_bus: Any | None = None,
+        max_concurrent: int = 10,
+        max_retries: int = 1,
     ) -> None:
         """
         Args:
-            agent_runner: An AgentRunner (or compatible) instance.
-                          Must expose create_run() and execute_run().
-            message_bus:  Optional AgentMessageBus for broadcasting plan events.
+            agent_runner:   An AgentRunner (or compatible) instance.
+                            Must expose create_run() and execute_run().
+            message_bus:    Optional AgentMessageBus for broadcasting plan events.
+            max_concurrent: Max subtasks running at the same time (back-pressure).
+            max_retries:    How many times to retry a failed subtask before giving up.
         """
         self._runner = agent_runner
         self._message_bus = message_bus
+        self._max_concurrent = max_concurrent
+        self._max_retries = max_retries
 
     async def execute_plan(
         self,
@@ -63,8 +74,10 @@ class Scheduler:
             raise ValueError(f"Cannot execute invalid plan: {errors}")
 
         completed_ids: set[str] = set()
+        failed_ids: set[str] = set()           # subtasks that failed after all retries
         results: dict[str, Any] = {}
         all_ids = {st.id for st in plan.subtasks}
+        semaphore = asyncio.Semaphore(self._max_concurrent)
 
         logger.info(
             "Starting plan %s execution: %d tasks, tenant=%s",
@@ -79,8 +92,41 @@ class Scheduler:
                 while completed_ids != all_ids:
                     ready = plan.get_ready_tasks(completed_ids)
 
+                    # Propagate dependency failures: skip tasks whose deps failed
+                    skippable = [
+                        st for st in ready
+                        if any(dep in failed_ids for dep in st.depends_on)
+                    ]
+                    for st in skippable:
+                        failed_deps = [d for d in st.depends_on if d in failed_ids]
+                        logger.warning(
+                            "Plan %s: skipping '%s' — failed deps: %s",
+                            plan.plan_id,
+                            st.id,
+                            failed_deps,
+                        )
+                        from harness.core.context import AgentResult
+                        results[st.id] = AgentResult(
+                            run_id=f"skipped_{st.id}",
+                            output="",
+                            steps=0,
+                            tokens=0,
+                            success=False,
+                            failure_class="UNKNOWN",
+                            error_message=f"Skipped: dependency {failed_deps} failed",
+                        )
+                        completed_ids.add(st.id)
+                        failed_ids.add(st.id)
+                        await self._publish(
+                            "subtask_skipped",
+                            plan.plan_id,
+                            {"subtask_id": st.id, "failed_deps": failed_deps},
+                        )
+                    ready = [st for st in ready if st not in skippable]
+
                     if not ready:
-                        # This should not happen if the plan is valid and not fully done
+                        if completed_ids == all_ids:
+                            break
                         remaining = [st.id for st in plan.subtasks if st.id not in completed_ids]
                         logger.error(
                             "Plan %s deadlocked: no ready tasks, remaining=%s",
@@ -99,10 +145,12 @@ class Scheduler:
                         [st.id for st in ready],
                     )
 
-                    # Execute all ready tasks concurrently
+                    # Execute all ready tasks concurrently, respecting back-pressure
                     batch_results = await asyncio.gather(
                         *[
-                            self._execute_subtask(st, tenant_id, results)
+                            self._execute_subtask_with_retry(
+                                st, tenant_id, results, semaphore
+                            )
                             for st in ready
                         ],
                         return_exceptions=True,
@@ -111,12 +159,11 @@ class Scheduler:
                     for st, result in zip(ready, batch_results):
                         if isinstance(result, Exception):
                             logger.error(
-                                "Plan %s sub-task '%s' failed: %s",
+                                "Plan %s sub-task '%s' failed after retries: %s",
                                 plan.plan_id,
                                 st.id,
                                 result,
                             )
-                            # Create a failed AgentResult
                             from harness.core.context import AgentResult
                             results[st.id] = AgentResult(
                                 run_id=f"failed_{st.id}",
@@ -127,8 +174,11 @@ class Scheduler:
                                 failure_class="UNKNOWN",
                                 error_message=str(result),
                             )
+                            failed_ids.add(st.id)
                         else:
                             results[st.id] = result
+                            if not getattr(result, "success", True):
+                                failed_ids.add(st.id)
 
                         completed_ids.add(st.id)
                         await self._publish(
@@ -146,25 +196,72 @@ class Scheduler:
 
         except asyncio.TimeoutError:
             logger.error("Plan %s timed out after %.1f seconds", plan.plan_id, timeout)
-            # Return partial results for completed tasks
             await self._publish(
                 "plan_timeout", plan.plan_id, {"completed": list(completed_ids)}
             )
             raise
 
+        succeeded = sum(1 for r in results.values() if getattr(r, "success", False))
         logger.info(
             "Plan %s completed: %d/%d tasks succeeded",
             plan.plan_id,
-            sum(1 for r in results.values() if getattr(r, "success", False)),
+            succeeded,
             len(results),
         )
         await self._publish(
             "plan_completed",
             plan.plan_id,
-            {"total": len(results), "succeeded": sum(1 for r in results.values() if getattr(r, "success", False))},
+            {"total": len(results), "succeeded": succeeded},
         )
 
         return results
+
+    async def _execute_subtask_with_retry(
+        self,
+        subtask: SubTask,
+        tenant_id: str,
+        predecessor_results: dict[str, Any],
+        semaphore: asyncio.Semaphore,
+    ) -> Any:
+        """Execute a subtask with back-pressure and retry on failure."""
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            async with semaphore:
+                try:
+                    result = await self._execute_subtask(
+                        subtask, tenant_id, predecessor_results
+                    )
+                    if getattr(result, "success", True):
+                        return result
+                    # Agent ran but reported failure — retry if attempts remain
+                    last_exc = RuntimeError(
+                        getattr(result, "error_message", "subtask returned success=False")
+                    )
+                    if attempt < self._max_retries:
+                        logger.warning(
+                            "Plan subtask '%s' failed (attempt %d/%d), retrying...",
+                            subtask.id,
+                            attempt + 1,
+                            self._max_retries + 1,
+                        )
+                        await asyncio.sleep(2 ** attempt)  # brief exponential back-off
+                    else:
+                        return result  # return the failed result after exhausting retries
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < self._max_retries:
+                        logger.warning(
+                            "Plan subtask '%s' raised (attempt %d/%d): %s — retrying...",
+                            subtask.id,
+                            attempt + 1,
+                            self._max_retries + 1,
+                            exc,
+                        )
+                        await asyncio.sleep(2 ** attempt)
+                    else:
+                        raise
+
+        raise last_exc  # type: ignore[misc]
 
     async def _execute_subtask(
         self,
