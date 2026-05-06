@@ -66,3 +66,9 @@ models/*.safetensors
 # Downloaded browser binaries and generated output artifacts
 /chrome/
 /output/
+
+# Docs, PDFs, and pitch decks — local only
+/docs/
+*.pdf
+*.pptx
+*.ppt
