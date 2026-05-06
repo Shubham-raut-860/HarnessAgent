@@ -204,6 +204,7 @@ def test_factory_builds_router_with_openai_only():
     cfg.vllm_base_url = ""
     cfg.sglang_base_url = ""
     cfg.llamacpp_base_url = ""
+    cfg.hermes_base_url = ""
 
     router = build_router(cfg)
     assert len(router._config.providers) == 2
@@ -223,6 +224,7 @@ def test_factory_builds_router_with_both_providers():
     cfg.vllm_base_url = ""
     cfg.sglang_base_url = ""
     cfg.llamacpp_base_url = ""
+    cfg.hermes_base_url = ""
 
     router = build_router(cfg)
     assert len(router._config.providers) == 2

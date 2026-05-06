@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from harness.llm.anthropic import AnthropicProvider
+from harness.llm.hermes import HermesXMLProvider
 from harness.llm.local import ModelCapabilities, OpenAICompatProvider
 from harness.llm.openai_provider import OpenAIProvider
 from harness.llm.router import LLMRouter, LLMRouterConfig
@@ -161,6 +162,31 @@ def build_router(config: "Settings") -> LLMRouter:
             context_window=4_096,
         )
         logger.info("Registered llama.cpp provider @ %s", llamacpp_url)
+
+    # ------------------------------------------------------------------
+    # Hermes / Qwen XML (SGLang or vLLM with Hermes-2-Pro / Qwen models)
+    # ------------------------------------------------------------------
+    hermes_url = getattr(config, "hermes_base_url", None) or ""
+    if hermes_url:
+        hermes_model = getattr(
+            config, "hermes_model", "NousResearch/Hermes-2-Pro-Llama-3-8B"
+        )
+        hermes_ctx = int(getattr(config, "hermes_context_window", 8_192))
+        router.register(
+            HermesXMLProvider(
+                base_url=hermes_url,
+                model=hermes_model,
+                context_window=hermes_ctx,
+            ),
+            priority=105,
+            context_window=hermes_ctx,
+        )
+        logger.info(
+            "Registered HermesXML provider: %s @ %s (ctx=%d)",
+            hermes_model,
+            hermes_url,
+            hermes_ctx,
+        )
 
     if not router._config.providers:
         raise RuntimeError(
