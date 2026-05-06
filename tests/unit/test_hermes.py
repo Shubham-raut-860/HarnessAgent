@@ -152,6 +152,136 @@ async def test_cycle_rejects_patch_when_score_below_threshold():
     prompt_store.apply_patch.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_hermes_runs_rollback_check_before_cycle():
+    """If online_monitor has a pending check, it should be evaluated first."""
+    online_monitor = AsyncMock()
+    online_monitor.check_and_maybe_rollback = AsyncMock(return_value=True)
+
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=2)  # below min_errors — cycle will skip
+
+    hermes = _make_hermes(collector=collector, config=_make_config(min_errors=5))
+    hermes._online_monitor = online_monitor
+
+    outcome = await hermes.run_cycle("sql")
+
+    online_monitor.check_and_maybe_rollback.assert_called_once_with(
+        agent_type="sql",
+        error_collector=collector,
+        prompt_manager=hermes._prompt_store,
+    )
+    assert outcome is None  # skipped due to insufficient errors
+
+
+@pytest.mark.asyncio
+async def test_hermes_schedules_rollback_check_after_auto_apply():
+    """After auto-apply, schedule_rollback_check must be called."""
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+
+    prompt_store = AsyncMock()
+    prompt_store.apply_patch = AsyncMock(return_value=MagicMock())
+    prompt_store.get_version = AsyncMock(return_value=MagicMock(
+        version_id="v_new", version_number=2
+    ))
+
+    online_monitor = AsyncMock()
+    online_monitor.check_and_maybe_rollback = AsyncMock(return_value=False)
+    online_monitor.schedule_rollback_check = AsyncMock()
+
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(
+        score=0.9, test_cases=10, successes=9
+    ))
+
+    metrics = MagicMock()
+    config = _make_config(auto_apply=True, threshold=0.7)
+    hermes = HermesLoop(
+        collector=collector, generator=generator, evaluator=evaluator,
+        prompt_store=prompt_store, metrics=metrics, config=config,
+        online_monitor=online_monitor,
+    )
+
+    outcome = await hermes.run_cycle("sql")
+
+    assert outcome is not None
+    assert outcome.applied is True
+    online_monitor.schedule_rollback_check.assert_called_once()
+    call_kwargs = online_monitor.schedule_rollback_check.call_args[1]
+    assert call_kwargs["agent_type"] == "sql"
+    assert call_kwargs["patch_id"] == patch.patch_id
+
+
+@pytest.mark.asyncio
+async def test_hermes_logs_cycle_to_mlflow():
+    """MLflow tracer should be called at the end of every evaluated cycle."""
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+
+    mlflow_tracer = AsyncMock()
+    mlflow_tracer.log_hermes_cycle = AsyncMock()
+
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(
+        score=0.5, test_cases=5, successes=3, failures=2
+    ))
+
+    metrics = MagicMock()
+    config = _make_config(auto_apply=False)
+
+    hermes = HermesLoop(
+        collector=collector, generator=generator, evaluator=evaluator,
+        prompt_store=AsyncMock(), metrics=metrics, config=config,
+        mlflow_tracer=mlflow_tracer,
+    )
+
+    await hermes.run_cycle("sql")
+
+    mlflow_tracer.log_hermes_cycle.assert_called_once()
+    call_kwargs = mlflow_tracer.log_hermes_cycle.call_args[1]
+    assert call_kwargs["agent_type"] == "sql"
+    assert abs(call_kwargs["score"] - 0.5) < 0.01
+
+
+@pytest.mark.asyncio
+async def test_hermes_no_rollback_check_when_monitor_is_none():
+    """HermesLoop with no online_monitor must work exactly as before."""
+    errors = [_make_error() for _ in range(10)]
+    patch = _make_patch()
+    collector = AsyncMock()
+    collector.count = AsyncMock(return_value=10)
+    collector.get_recent = AsyncMock(return_value=errors)
+    generator = AsyncMock()
+    generator.generate = AsyncMock(return_value=patch)
+    evaluator = AsyncMock()
+    evaluator.score = AsyncMock(return_value=MagicMock(score=0.8))
+
+    hermes = _make_hermes(
+        collector=collector, generator=generator, evaluator=evaluator,
+        config=_make_config(auto_apply=False),
+    )
+    # online_monitor is None by default in _make_hermes
+
+    outcome = await hermes.run_cycle("sql")
+    assert outcome is not None
+    assert outcome.patch is not None
+
+
 def test_evaluator_scores_patch_correctly():
     result = EvalResult(
         patch_id="p1", test_cases=10, successes=8, failures=2,
