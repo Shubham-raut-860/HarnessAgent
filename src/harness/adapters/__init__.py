@@ -33,6 +33,7 @@ from harness.adapters.autogen import AutoGenAdapter
 from harness.adapters.base import FrameworkAdapter, FrameworkResult
 from harness.adapters.crewai import CrewAIAdapter
 from harness.adapters.langgraph import LangGraphAdapter
+from harness.adapters.openclaw import OpenClawAdapter
 
 __all__ = [
     "FrameworkResult",
@@ -40,4 +41,5 @@ __all__ = [
     "LangGraphAdapter",
     "AutoGenAdapter",
     "CrewAIAdapter",
+    "OpenClawAdapter",
 ]
