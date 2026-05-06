@@ -42,13 +42,15 @@ class HermesLoop:
     """Orchestrates the Hermes self-improvement loop.
 
     One cycle per agent type:
-    1. Check error count in rolling window — skip if fewer than min_errors.
-    2. Sample a batch of recent errors.
-    3. Generate a patch proposal from the LLM.
-    4. Evaluate the patch by replaying failing tasks.
-    5. If score > threshold AND auto_apply: apply via prompt_store.
+    1. Run pending rollback check (if a patch was auto-applied last cycle).
+    2. Check error count in rolling window — skip if fewer than min_errors.
+    3. Sample a batch of recent errors.
+    4. Generate a patch proposal from the LLM.
+    5. Evaluate the patch by replaying failing tasks.
+    6. If score > threshold AND auto_apply: apply via prompt_store,
+       then schedule a rollback check for the next cycle.
        Otherwise: store with status="pending" for human review.
-    6. Record metrics.
+    7. Record metrics to Prometheus and MLflow.
 
     Can be run on a schedule via APScheduler using start_background().
     """
@@ -58,18 +60,22 @@ class HermesLoop:
         collector: ErrorCollector,
         generator: PatchGenerator,
         evaluator: Evaluator,
-        prompt_store: Any,  # PromptStore
-        metrics: Any,
-        config: Any,  # Settings
+        prompt_store: Any,          # PromptStore or PromptManager
+        metrics: Any,               # HarnessMetrics
+        config: Any,                # Settings
+        online_monitor: Any | None = None,   # OnlineLearningMonitor
+        mlflow_tracer: Any | None = None,    # MLflowAgentTracer
     ) -> None:
         """
         Args:
-            collector:    ErrorCollector for sampling agent failures.
-            generator:    PatchGenerator for proposing patches.
-            evaluator:    Evaluator for scoring patches.
-            prompt_store: PromptStore (or PromptManager) for applying patches.
-            metrics:      HarnessMetrics instance for recording patch counts.
-            config:       Settings with hermes_* configuration keys.
+            collector:       ErrorCollector for sampling agent failures.
+            generator:       PatchGenerator for proposing patches.
+            evaluator:       Evaluator for scoring patches.
+            prompt_store:    PromptStore (or PromptManager) for applying patches.
+            metrics:         HarnessMetrics instance for recording patch counts.
+            config:          Settings with hermes_* configuration keys.
+            online_monitor:  Optional OnlineLearningMonitor for post-apply regression checks.
+            mlflow_tracer:   Optional MLflowAgentTracer for cycle logging.
         """
         self._collector = collector
         self._generator = generator
@@ -77,6 +83,8 @@ class HermesLoop:
         self._prompt_store = prompt_store
         self._metrics = metrics
         self._config = config
+        self._online_monitor = online_monitor
+        self._mlflow_tracer = mlflow_tracer
 
         self.threshold: float = getattr(config, "hermes_patch_score_threshold", 0.7)
         self.auto_apply: bool = getattr(config, "hermes_auto_apply", False)
@@ -97,6 +105,24 @@ class HermesLoop:
             PatchOutcome if a patch was proposed/evaluated, None if skipped.
         """
         logger.info("Hermes cycle starting for agent_type=%s", agent_type)
+        rolled_back = False
+
+        # 0. Run pending rollback check from the previous cycle's auto-apply
+        if self._online_monitor is not None:
+            try:
+                rolled_back = await self._online_monitor.check_and_maybe_rollback(
+                    agent_type=agent_type,
+                    error_collector=self._collector,
+                    prompt_manager=self._prompt_store,
+                )
+                if rolled_back:
+                    logger.warning(
+                        "Hermes: rolled back last patch for agent_type=%s "
+                        "due to regression — starting fresh cycle",
+                        agent_type,
+                    )
+            except Exception as exc:
+                logger.warning("Hermes: rollback check failed for %s: %s", agent_type, exc)
 
         # 1. Check error count in window
         try:
@@ -204,6 +230,18 @@ class HermesLoop:
         elif score >= self.threshold and self.auto_apply:
             # Apply the patch automatically
             try:
+                # Capture baseline version and error count BEFORE applying
+                baseline_version_id = ""
+                try:
+                    if hasattr(self._prompt_store, "get_version"):
+                        bv = await self._prompt_store.get_version(agent_type)
+                        baseline_version_id = bv.version_id if bv else ""
+                    elif hasattr(self._prompt_store, "get_active"):
+                        bv = await self._prompt_store.get_active(agent_type)
+                        baseline_version_id = bv.version_id if bv else ""
+                except Exception:
+                    pass
+
                 await self._apply_patch(patch, agent_type)
                 patch.status = "applied"
                 applied = True
@@ -217,6 +255,43 @@ class HermesLoop:
                     agent_type,
                     score,
                 )
+
+                # Schedule rollback check for the next cycle
+                if self._online_monitor is not None and baseline_version_id:
+                    try:
+                        new_version_id = ""
+                        try:
+                            if hasattr(self._prompt_store, "get_version"):
+                                nv = await self._prompt_store.get_version(agent_type)
+                                new_version_id = nv.version_id if nv else ""
+                        except Exception:
+                            pass
+                        await self._online_monitor.schedule_rollback_check(
+                            agent_type=agent_type,
+                            patch_id=patch.patch_id,
+                            baseline_version_id=baseline_version_id,
+                            new_version_id=new_version_id,
+                            baseline_error_count=error_count,
+                        )
+                    except Exception as exc:
+                        logger.debug("Could not schedule rollback check: %s", exc)
+
+                # Log prompt version change to MLflow
+                if self._mlflow_tracer is not None:
+                    try:
+                        if hasattr(self._prompt_store, "get_version"):
+                            nv = await self._prompt_store.get_version(agent_type)
+                            if nv:
+                                await self._mlflow_tracer.log_prompt_version(
+                                    agent_type=agent_type,
+                                    version_id=nv.version_id,
+                                    version_number=nv.version_number,
+                                    created_by="hermes",
+                                    patch_id=patch.patch_id,
+                                )
+                    except Exception as exc:
+                        logger.debug("MLflow prompt version log failed: %s", exc)
+
             except Exception as exc:
                 patch.status = "pending"
                 reason = f"Application failed: {exc} — patch queued for manual review."
@@ -240,8 +315,27 @@ class HermesLoop:
             )
             await self._store_patch(patch)
 
-        # 7. Record metrics
+        # 7. Record Prometheus metrics
         self._record_metric(agent_type, patch.status)
+
+        # 8. Log cycle to MLflow
+        if self._mlflow_tracer is not None:
+            try:
+                eval_successes = eval_result.successes if eval_result else 0
+                eval_total = eval_result.test_cases if eval_result else 0
+                await self._mlflow_tracer.log_hermes_cycle(
+                    agent_type=agent_type,
+                    patch_id=patch.patch_id,
+                    score=score,
+                    applied=applied,
+                    errors_sampled=len(errors),
+                    reason=reason,
+                    eval_successes=eval_successes,
+                    eval_total=eval_total,
+                    rolled_back=rolled_back,
+                )
+            except Exception as exc:
+                logger.debug("MLflow cycle log failed: %s", exc)
 
         logger.info(
             "Hermes cycle complete for %s: patch=%s status=%s score=%.3f applied=%s",

@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ def _append_run_log(run_id: str, entry: dict) -> None:
     """Append one JSON line to the per-run log. Never raises."""
     try:
         line = json.dumps({**entry, "run_id": run_id,
-                           "ts": datetime.now(timezone.utc).isoformat()},
+                           "ts": datetime.now(UTC).isoformat()},
                           ensure_ascii=False)
         with _run_log_path(run_id).open("a", encoding="utf-8") as fh:
             fh.write(line + "\n")
@@ -104,6 +104,8 @@ class BaseAgent:
         cost_tracker: Any,
         checkpoint_manager: Any,
         message_bus: Any | None = None,
+        online_monitor: Any | None = None,
+        prompt_manager: Any | None = None,
     ) -> None:
         self._llm_router = llm_router
         self._memory = memory_manager
@@ -117,6 +119,8 @@ class BaseAgent:
         self._cost_tracker = cost_tracker
         self._checkpoint_manager = checkpoint_manager
         self._message_bus = message_bus
+        self._online_monitor = online_monitor
+        self._prompt_manager = prompt_manager
 
     # ------------------------------------------------------------------
     # Main run loop
@@ -127,19 +131,22 @@ class BaseAgent:
         run_start = time.monotonic()
         output: str = ""
         total_cost_usd: float = 0.0
+        tool_calls_total = 0
+        tool_errors_total = 0
+        guardrail_hits = 0
+        cache_hits = 0
+        cache_read_tokens = 0
         metrics = _get_metrics()
 
         # 1. Emit started event and begin MLflow run
         await self._emit_event(StepEvent.started(ctx))
-        mlflow_run_id: str | None = None
-
         if metrics is not None:
             try:
                 metrics.active_runs.labels(agent_type=self.agent_type).inc()
             except Exception:
                 pass
 
-        async with self._mlflow_context(ctx) as mlflow_run_id:
+        async with self._mlflow_context(ctx):
             try:
                 # Log run start locally
                 _append_run_log(ctx.run_id, {
@@ -175,6 +182,9 @@ class BaseAgent:
                     # 3e-f. Record token usage
                     total_tokens = response.input_tokens + response.output_tokens
                     ctx.tick(tokens=total_tokens)
+                    if response.cached:
+                        cache_hits += 1
+                        cache_read_tokens += response.input_tokens
 
                     # 3g. Cost tracking
                     if self._cost_tracker is not None:
@@ -246,31 +256,49 @@ class BaseAgent:
                     if not response.tool_calls:
                         output = self.extract_final_answer(history)
                         break
+                    tool_calls_total += len(response.tool_calls)
 
-                    # 3m. Execute each tool call
+                    # 3m. Execute tool calls — HITL sequential, execution parallel
                     tool_results_for_history: list[dict[str, Any]] = []
+
+                    # HITL must be sequential (interactive human approval)
                     for call in response.tool_calls:
-                        # HITL check
                         await self._check_hitl(ctx, call)
 
-                        # Execute tool
+                    # Execute all approved tool calls in parallel
+                    async def _execute_one(call: Any) -> ToolResult:
                         try:
-                            result = await self._tool_registry.execute(ctx, call)
+                            return await self._tool_registry.execute(ctx, call)
                         except ToolError as exc:
                             logger.warning("Tool '%s' failed: %s", call.name, exc)
-                            result = ToolResult(
+                            return ToolResult(
                                 data=None,
                                 error=str(exc),
                                 metadata={"failure_class": exc.failure_class.value},
                             )
                         except SafetyViolation as exc:
                             logger.warning("Tool '%s' blocked: %s", call.name, exc)
-                            result = ToolResult(
+                            return ToolResult(
                                 data=None,
                                 error=f"Blocked by safety policy: {exc}",
+                                metadata={"guardrail_hit": True},
                             )
 
+                    tool_results: list[ToolResult] = list(
+                        await asyncio.gather(*[_execute_one(c) for c in response.tool_calls])
+                    )
+
+                    # Process results sequentially (history order must be preserved)
+                    for call, result in zip(response.tool_calls, tool_results, strict=True):
                         # Push tool result to memory
+                        if result.is_error:
+                            tool_errors_total += 1
+                        if result.metadata.get("guardrail_hit") or (
+                            result.error
+                            and "blocked by safety policy" in result.error.lower()
+                        ):
+                            guardrail_hits += 1
+
                         if ctx.memory is not None:
                             try:
                                 await ctx.memory.push_message(
@@ -343,6 +371,7 @@ class BaseAgent:
             except HITLRejected as exc:
                 ctx.failed = True
                 ctx.failure_class = FailureClass.INTER_AGENT_REJECT.value
+                guardrail_hits += 1
                 output = f"HITL rejected: {exc}"
                 await self._record_failure(ctx, exc)
                 await self._emit_event(StepEvent.failed(ctx, str(exc)))
@@ -350,6 +379,7 @@ class BaseAgent:
             except SafetyViolation as exc:
                 ctx.failed = True
                 ctx.failure_class = exc.failure_class.value
+                guardrail_hits += 1
                 output = f"Safety violation: {exc}"
                 await self._record_failure(ctx, exc)
                 await self._emit_event(StepEvent.failed(ctx, str(exc)))
@@ -380,6 +410,30 @@ class BaseAgent:
                 # Save full conversation history to disk (gitignored, local only)
                 if history:
                     _save_conversation(ctx.workspace_path, ctx.run_id, history)
+
+                # Feed online learning monitor so Hermes can detect regressions
+                if self._online_monitor is not None:
+                    try:
+                        version_id = ""
+                        version_number = 0
+                        if self._prompt_manager is not None:
+                            pv = await _safe_call(
+                                self._prompt_manager.get_version, self.agent_type
+                            )
+                            if pv is not None:
+                                version_id = pv.version_id
+                                version_number = pv.version_number
+                        if version_id:
+                            await self._online_monitor.record_run(
+                                agent_type=self.agent_type,
+                                version_id=version_id,
+                                version_number=version_number,
+                                success=not ctx.failed,
+                                cost_usd=total_cost_usd,
+                                steps=ctx.step_count,
+                            )
+                    except Exception as exc:
+                        logger.debug("online_monitor.record_run failed: %s", exc)
 
                 # Log run completion locally
                 elapsed = time.monotonic() - run_start
@@ -422,6 +476,12 @@ class BaseAgent:
             error_message=output if ctx.failed else None,
             elapsed_seconds=elapsed,
             cost_usd=total_cost_usd,
+            tool_calls=tool_calls_total,
+            tool_errors=tool_errors_total,
+            guardrail_hits=guardrail_hits,
+            handoff_count=int(ctx.metadata.get("handoff_count", 0) or 0),
+            cache_hits=cache_hits,
+            cache_read_tokens=cache_read_tokens,
         )
 
     # ------------------------------------------------------------------
@@ -500,7 +560,7 @@ class BaseAgent:
             return FailureClass.INTER_AGENT_REJECT
         if isinstance(e, HarnessError):
             return e.failure_class
-        if isinstance(e, asyncio.TimeoutError):
+        if isinstance(e, TimeoutError):
             return FailureClass.BUDGET_TIME
         return FailureClass.UNKNOWN
 
@@ -568,11 +628,67 @@ class BaseAgent:
         remaining_tokens = ctx.max_tokens - ctx.token_count
         max_tokens = min(4096, max(256, remaining_tokens // 2))
 
+        # Use streaming when requested and no tools are needed (streaming + tools
+        # requires special handling that varies by provider)
+        if ctx.metadata.get("stream_tokens") and not tools:
+            return await self._call_llm_streaming(ctx, messages, system, max_tokens)
+
         return await self._llm_router.complete(
             messages=messages,
             system=system,
             tools=tools if tools else None,
             max_tokens=max_tokens,
+        )
+
+    async def _call_llm_streaming(
+        self,
+        ctx: AgentContext,
+        messages: list[dict[str, Any]],
+        system: str,
+        max_tokens: int,
+    ) -> LLMResponse:
+        """Stream tokens from the LLM, publishing each delta as a StepEvent.
+
+        Accumulates the full text and returns a synthetic LLMResponse so the
+        rest of the agent loop (history, cost tracking, safety) works unchanged.
+        """
+        chunks: list[str] = []
+        try:
+            async for delta in self._llm_router.stream(
+                messages=messages,
+                system=system,
+                max_tokens=max_tokens,
+            ):
+                chunks.append(delta)
+                # Publish token delta for SSE clients
+                await self._emit_event(
+                    StepEvent(
+                        run_id=ctx.run_id,
+                        step=ctx.step_count,
+                        event_type="token_delta",
+                        payload={"delta": delta},
+                        timestamp=_utcnow(),
+                    )
+                )
+        except Exception as exc:
+            logger.warning("Streaming LLM call failed, falling back to complete(): %s", exc)
+            return await self._llm_router.complete(
+                messages=messages,
+                system=system,
+                max_tokens=max_tokens,
+            )
+
+        full_text = "".join(chunks)
+        # Estimate tokens (streaming responses don't always return exact counts)
+        estimated_tokens = max(1, len(full_text) // 4)
+        return LLMResponse(
+            content=full_text,
+            tool_calls=[],
+            input_tokens=estimated_tokens,
+            output_tokens=estimated_tokens,
+            model=getattr(self._llm_router, "model", "unknown"),
+            provider=getattr(self._llm_router, "provider_name", "unknown"),
+            cached=False,
         )
 
     # ------------------------------------------------------------------
@@ -634,8 +750,9 @@ class BaseAgent:
                         len(older),
                     )
                     return [
-                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"}
-                    ] + recent
+                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"},
+                        *recent,
+                    ]
             except Exception as exc:
                 logger.debug("memory.fit_history failed: %s", exc)
 
@@ -670,8 +787,9 @@ class BaseAgent:
                         summary_response.output_tokens,
                     )
                     return [
-                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"}
-                    ] + recent
+                        {"role": "user", "content": f"[Conversation summary]: {summary_text}"},
+                        *recent,
+                    ]
         except Exception as exc:
             logger.debug("LLM history summarization failed: %s", exc)
 
@@ -857,5 +975,4 @@ def _get_metrics() -> Any:
 
 
 def _utcnow():
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
