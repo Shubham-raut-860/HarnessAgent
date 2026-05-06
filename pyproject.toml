@@ -3,78 +3,146 @@ requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "harness-agent"
+name = "agentharness"
 version = "0.1.0"
-description = "Production-grade multi-agent harness with LLM routing, memory, tools, and observability"
-authors = ["thepradip"]
+description = "Production-grade multi-agent harness with LLM routing, memory, safety, and observability"
+authors = ["thepradip <pradiptivhale@gmail.com>"]
+license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/thepradip/HarnessAgent"
+repository = "https://github.com/thepradip/HarnessAgent"
+keywords = ["llm", "agent", "multi-agent", "langchain", "autogen", "crewai", "langgraph", "openai", "anthropic"]
 packages = [{include = "harness", from = "src"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: FastAPI",
+    "Typing :: Typed",
+]
 
+# ---------------------------------------------------------------------------
+# Core — minimal install: API server, LLM routing, Redis, basic storage, auth
+# pip install llm-harness
+# ---------------------------------------------------------------------------
 [tool.poetry.dependencies]
-python = "^3.11"
-fastapi = ">=0.115.0"
-uvicorn = {extras = ["standard"], version = ">=0.30.0"}
-pydantic = ">=2.9.0"
+python          = "^3.11"
+fastapi         = ">=0.115.0"
+uvicorn         = {extras = ["standard"], version = ">=0.30.0"}
+pydantic        = ">=2.9.0"
 pydantic-settings = ">=2.6.0"
-httpx = ">=0.28.0"
-anthropic = ">=0.40.0"
-openai = ">=1.50.0"
-instructor = ">=1.6.0"
-tiktoken = ">=0.8.0"
-chromadb = ">=0.5.0"
-qdrant-client = ">=1.11.0"
-weaviate-client = ">=4.9.0"
-networkx = ">=3.3"
-neo4j = ">=5.27.0"
-redis = ">=5.2.0"
-sentence-transformers = ">=3.3.0"
-mlflow = ">=2.18.0"
-opentelemetry-api = ">=1.27.0"
-opentelemetry-sdk = ">=1.27.0"
-opentelemetry-exporter-otlp = ">=1.27.0"
-prometheus-client = ">=0.21.0"
-mcp = ">=1.2.0"
-sqlalchemy = {extras = ["asyncio"], version = ">=2.0.0"}
-asyncpg = ">=0.30.0"
-aiosqlite = ">=0.20.0"
-sqlglot = ">=20.0.0"
-jsonschema = ">=4.23.0"
-pymupdf = ">=1.24.0"
-trafilatura = ">=1.12.0"
-python-docx = ">=1.1.0"
-rq = ">=2.0.0"
-structlog = ">=24.4.0"
-python-jose = {extras = ["cryptography"], version = ">=3.3.0"}
-passlib = {extras = ["bcrypt"], version = ">=1.7.4"}
-apscheduler = ">=3.10.0"
-aiofiles = ">=24.1.0"
+httpx           = ">=0.28.0"
+anthropic       = ">=0.40.0"
+openai          = ">=1.50.0"
+tiktoken        = ">=0.8.0"
+redis           = ">=5.2.0"
+sqlalchemy      = {extras = ["asyncio"], version = ">=2.0.0"}
+aiosqlite       = ">=0.20.0"
+networkx        = ">=3.3"
+jsonschema      = ">=4.23.0"
+structlog       = ">=24.4.0"
+aiofiles        = ">=24.1.0"
 python-multipart = ">=0.0.12"
-sse-starlette = ">=2.1.0"
+sse-starlette   = ">=2.1.0"
+apscheduler     = ">=3.10.0"
+rq              = ">=2.0.0"
+python-jose     = {extras = ["cryptography"], version = ">=3.3.0"}
+passlib         = {extras = ["bcrypt"], version = ">=1.7.4"}
 
+# ---------------------------------------------------------------------------
+# Extras — install only what you need
+# ---------------------------------------------------------------------------
+
+# Vector memory backends
+# pip install llm-harness[vector]
+chromadb            = {version = ">=0.5.0",  optional = true}
+qdrant-client       = {version = ">=1.11.0", optional = true}
+weaviate-client     = {version = ">=4.9.0",  optional = true}
+sentence-transformers = {version = ">=3.3.0", optional = true}
+
+# Graph memory backend (Neo4j — networkx is already in core)
+# pip install llm-harness[graph]
+neo4j = {version = ">=5.27.0", optional = true}
+
+# Observability: MLflow traces, OpenTelemetry spans, Prometheus metrics
+# pip install llm-harness[observe]
+mlflow                        = {version = ">=2.18.0", optional = true}
+opentelemetry-api             = {version = ">=1.27.0", optional = true}
+opentelemetry-sdk             = {version = ">=1.27.0", optional = true}
+opentelemetry-exporter-otlp   = {version = ">=1.27.0", optional = true}
+prometheus-client             = {version = ">=0.21.0", optional = true}
+
+# Document ingestion: PDF, HTML, DOCX
+# pip install llm-harness[ingestion]
+pymupdf      = {version = ">=1.24.0", optional = true}
+trafilatura  = {version = ">=1.12.0", optional = true}
+python-docx  = {version = ">=1.1.0",  optional = true}
+
+# SQL agent: async PostgreSQL driver + SQL parser
+# pip install llm-harness[sql]
+asyncpg = {version = ">=0.30.0", optional = true}
+sqlglot = {version = ">=20.0.0", optional = true}
+
+# MCP server integration
+# pip install llm-harness[mcp]
+mcp = {version = ">=1.2.0", optional = true}
+
+# Structured LLM output (instructor)
+# pip install llm-harness[structured]
+instructor = {version = ">=1.6.0", optional = true}
+
+[tool.poetry.extras]
+vector     = ["chromadb", "qdrant-client", "weaviate-client", "sentence-transformers"]
+graph      = ["neo4j"]
+observe    = ["mlflow", "opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp", "prometheus-client"]
+ingestion  = ["pymupdf", "trafilatura", "python-docx"]
+sql        = ["asyncpg", "sqlglot"]
+mcp        = ["mcp"]
+structured = ["instructor"]
+all        = [
+    "chromadb", "qdrant-client", "weaviate-client", "sentence-transformers",
+    "neo4j",
+    "mlflow", "opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp", "prometheus-client",
+    "pymupdf", "trafilatura", "python-docx",
+    "asyncpg", "sqlglot",
+    "mcp",
+    "instructor",
+]
+
+# ---------------------------------------------------------------------------
+# Dev dependencies
+# ---------------------------------------------------------------------------
 [tool.poetry.group.dev.dependencies]
-pytest = ">=8.3.0"
-pytest-asyncio = ">=0.24.0"
-pytest-cov = ">=6.0.0"
-pytest-mock = ">=3.14.0"
-fakeredis = ">=2.26.0"
-respx = ">=0.21.0"
-factory-boy = ">=3.3.0"
-freezegun = ">=1.5.0"
-ruff = ">=0.8.0"
-mypy = ">=1.13.0"
-pdoc = "^16.0.0"
-md2pdf = "^3.1.1"
+pytest          = ">=8.3.0"
+pytest-asyncio  = ">=0.24.0"
+pytest-cov      = ">=6.0.0"
+pytest-mock     = ">=3.14.0"
+fakeredis       = ">=2.26.0"
+respx           = ">=0.21.0"
+factory-boy     = ">=3.3.0"
+freezegun       = ">=1.5.0"
+ruff            = ">=0.8.0"
+mypy            = ">=1.13.0"
 
+# ---------------------------------------------------------------------------
+# Tool config
+# ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths    = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
+python_classes  = ["Test*"]
 python_functions = ["test_*"]
 addopts = ["--tb=short", "-q"]
 
 [tool.ruff]
-line-length = 100
+line-length    = 100
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -85,15 +153,15 @@ ignore = ["E501", "B008", "N818"]
 known-first-party = ["harness"]
 
 [tool.mypy]
-python_version = "3.11"
-strict = true
+python_version      = "3.11"
+strict              = true
 ignore_missing_imports = true
-plugins = ["pydantic.mypy"]
+plugins             = ["pydantic.mypy"]
 
 [tool.coverage.run]
 source = ["src/harness"]
-omit = ["*/tests/*", "*/__init__.py"]
+omit   = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under   = 80
 show_missing = true
