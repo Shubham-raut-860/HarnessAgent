@@ -267,6 +267,67 @@ class PromptStore:
         return await self.promote(target.version_id)
 
     # ------------------------------------------------------------------
+    # Score tracking
+    # ------------------------------------------------------------------
+
+    async def update_score(
+        self, agent_type: str, version_id: str, score: float
+    ) -> None:
+        """Update the evaluation score on an existing prompt version.
+
+        Called by the Hermes evaluator and online monitor after measuring
+        live performance. Does nothing if the version is not found.
+
+        Args:
+            agent_type: The agent type the version belongs to.
+            version_id: The version to update.
+            score:      New score in [0, 1].
+        """
+        version = await self.get(version_id=version_id, agent_type=agent_type)
+        if version is None:
+            logger.debug("update_score: version %s not found for %s", version_id[:8], agent_type)
+            return
+        version.score = max(0.0, min(1.0, score))
+        await self.save(version)
+        logger.debug(
+            "Updated score for version %s (agent_type=%s): %.3f",
+            version_id[:8],
+            agent_type,
+            score,
+        )
+
+    async def get_performance_history(
+        self, agent_type: str, limit: int = 20
+    ) -> list[dict]:
+        """Return version performance history in chronological order.
+
+        Useful for charting score progression across prompt versions.
+
+        Args:
+            agent_type: The agent type to query.
+            limit:      Maximum number of versions to include.
+
+        Returns:
+            List of dicts with version_number, score, active, created_at,
+            created_by, patch_id — oldest first.
+        """
+        versions = await self.list_versions(agent_type, limit=limit)
+        # list_versions returns newest-first; reverse for chronological order
+        return [
+            {
+                "version_number": v.version_number,
+                "version_id": v.version_id,
+                "score": v.score,
+                "active": v.active,
+                "created_at": v.created_at.isoformat(),
+                "created_by": v.created_by,
+                "patch_id": v.patch_id,
+                "tags": v.tags,
+            }
+            for v in reversed(versions)
+        ]
+
+    # ------------------------------------------------------------------
     # Deletion
     # ------------------------------------------------------------------
 

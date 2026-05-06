@@ -204,17 +204,17 @@ class PromptManager:
             },
         )
 
-        # Promote new version and clear cache
-        await self._store.promote(new_version.version_id)
+        # Promote new version (returns the updated object with active=True) and clear cache
+        promoted = await self._store.promote(new_version.version_id)
         self._clear_cache(agent_type)
 
         logger.info(
             "Applied patch %s to agent_type=%s (new version_id=%s)",
             patch_id,
             agent_type,
-            new_version.version_id[:8],
+            promoted.version_id[:8],
         )
-        return new_version
+        return promoted
 
     # ------------------------------------------------------------------
     # Initialization
