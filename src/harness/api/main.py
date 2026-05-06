@@ -5,25 +5,26 @@ from __future__ import annotations
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
-from prometheus_client import REGISTRY, CollectorRegistry
+from fastapi.responses import FileResponse, JSONResponse
+from prometheus_client import REGISTRY
 
 from harness.core.config import get_config
 from harness.core.errors import (
     BudgetExceeded,
     CircuitOpenError,
+    FailureClass,
     HarnessError,
     LLMError,
     SafetyViolation,
     ToolError,
 )
-from harness.core.errors import FailureClass
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ async def lifespan(app: FastAPI):
 
     # Prometheus metrics (create a fresh registry if running in tests)
     try:
-        from prometheus_client import Counter, Gauge, Histogram
+        from prometheus_client import Counter
         app.state.metrics = {
             "requests_total": Counter(
                 "harness_requests_total",
@@ -228,16 +229,31 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
     # Routers
     # ------------------------------------------------------------------
+    from harness.api.routes.evals import router as evals_router
     from harness.api.routes.health import router as health_router
+    from harness.api.routes.improvement import router as improvement_router
+    from harness.api.routes.memory import router as memory_router
     from harness.api.routes.runs import router as runs_router
     from harness.api.routes.steps import router as steps_router
-    from harness.api.routes.memory import router as memory_router
-    from harness.api.routes.improvement import router as improvement_router
 
     app.include_router(health_router, tags=["Health"])
     app.include_router(runs_router, prefix="/runs", tags=["Runs"])
     app.include_router(steps_router, prefix="/runs", tags=["Steps"])
     app.include_router(memory_router, prefix="/memory", tags=["Memory"])
+    app.include_router(evals_router, prefix="/evals", tags=["Evals"])
     app.include_router(improvement_router, tags=["Improvement"])
+
+    # ------------------------------------------------------------------
+    # Operator UI
+    # ------------------------------------------------------------------
+    ui_path = Path(__file__).resolve().parents[3] / "ui" / "dashboard.html"
+
+    @app.get("/", include_in_schema=False)
+    async def dashboard() -> FileResponse:
+        return FileResponse(ui_path)
+
+    @app.get("/ui", include_in_schema=False)
+    async def dashboard_alias() -> FileResponse:
+        return FileResponse(ui_path)
 
     return app

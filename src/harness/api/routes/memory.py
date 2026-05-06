@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, ConfigDict, Field
 
 from harness.api.deps import get_current_tenant, get_memory_manager
 
@@ -23,13 +23,17 @@ router = APIRouter()
 class RememberRequest(BaseModel):
     """Request body for storing a memory entry."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "text": "Users table has columns: id, email, created_at",
+                "metadata": {"source": "schema_docs"},
+            }
+        }
+    )
+
     text: str = Field(..., description="Text to store", min_length=1)
     metadata: dict = Field(default_factory=dict, description="Optional metadata")
-
-    class Config:
-        json_schema_extra = {
-            "example": {"text": "Users table has columns: id, email, created_at", "metadata": {"source": "schema_docs"}}
-        }
 
 
 class RememberResponse(BaseModel):
@@ -104,7 +108,7 @@ async def remember(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to store memory: {exc}",
-        )
+        ) from exc
 
 
 @router.post("/recall", response_model=list[MemoryEntryResponse])
@@ -146,7 +150,7 @@ async def recall(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to recall memories: {exc}",
-        )
+        ) from exc
 
 
 @router.get("/graph", response_model=GraphQueryResponse)
@@ -203,10 +207,15 @@ async def query_graph(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
 
-@router.delete("/session/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/session/{run_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    response_class=Response,
+)
 async def clear_session(
     run_id: str,
     tenant_id: str = Depends(get_current_tenant),
@@ -238,4 +247,4 @@ async def clear_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to clear session: {exc}",
-        )
+        ) from exc

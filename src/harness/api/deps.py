@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
 from typing import Any, AsyncGenerator, Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 from harness.core.config import get_config
@@ -13,6 +15,14 @@ from harness.core.config import get_config
 logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
+
+# Redis key prefix for API key records
+_APIKEY_PREFIX = "harness:apikey"
+
+
+def _hash_api_key(raw_key: str) -> str:
+    """Return a truncated SHA-256 hash of the raw key for Redis lookup."""
+    return hashlib.sha256(raw_key.encode()).hexdigest()[:32]
 
 
 # ---------------------------------------------------------------------------
@@ -136,67 +146,167 @@ def _decode_jwt(token: str) -> dict:
         )
 
 
-async def get_current_tenant(
-    token: Optional[str] = Depends(oauth2_scheme),
-) -> str:
-    """Extract the tenant_id from the JWT bearer token.
+async def _resolve_api_key(request: Request, raw_key: str) -> Optional[str]:
+    """Look up a raw API key in Redis and return the tenant_id, or None."""
+    try:
+        redis = getattr(request.app.state, "redis", None)
+        if redis is None:
+            return None
+        key_hash = _hash_api_key(raw_key)
+        stored = await redis.hgetall(f"{_APIKEY_PREFIX}:{key_hash}")
+        if not stored:
+            return None
+        tenant_id = stored.get("tenant_id") or stored.get(b"tenant_id")
+        if isinstance(tenant_id, bytes):
+            tenant_id = tenant_id.decode()
+        # Update last_used timestamp (fire-and-forget)
+        import time
+        try:
+            await redis.hset(f"{_APIKEY_PREFIX}:{key_hash}", "last_used", str(time.time()))
+        except Exception:
+            pass
+        return str(tenant_id) if tenant_id else None
+    except Exception as exc:
+        logger.debug("API key lookup failed: %s", exc)
+        return None
 
-    Returns "default" if no token is provided in dev mode.
+
+async def create_api_key(
+    request: Request,
+    tenant_id: str,
+    name: str = "default",
+) -> str:
+    """Create a new API key for *tenant_id* and store its hash in Redis.
 
     Args:
-        token: JWT bearer token (optional).
+        request:   FastAPI request (for Redis access).
+        tenant_id: The tenant this key belongs to.
+        name:      Human-readable label for the key.
+
+    Returns:
+        The raw API key string (shown once, never stored in plain text).
+    """
+    import time
+    raw_key = secrets.token_urlsafe(32)
+    key_hash = _hash_api_key(raw_key)
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise RuntimeError("Redis not available")
+    await redis.hset(
+        f"{_APIKEY_PREFIX}:{key_hash}",
+        mapping={
+            "tenant_id": tenant_id,
+            "name": name,
+            "created_at": str(time.time()),
+            "last_used": "",
+        },
+    )
+    # No TTL — API keys are permanent until revoked
+    logger.info("Created API key '%s' for tenant %s", name, tenant_id)
+    return raw_key
+
+
+async def revoke_api_key(request: Request, raw_key: str) -> bool:
+    """Delete an API key from Redis.  Returns True if it existed."""
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        return False
+    key_hash = _hash_api_key(raw_key)
+    deleted = await redis.delete(f"{_APIKEY_PREFIX}:{key_hash}")
+    return bool(deleted)
+
+
+async def get_current_tenant(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> str:
+    """Extract the tenant_id from a JWT bearer token OR an X-API-Key header.
+
+    Auth precedence: API key → JWT → dev default.
+
+    Args:
+        request:   FastAPI request (needed for Redis API-key lookup).
+        token:     JWT bearer token (optional).
+        x_api_key: Raw API key from ``X-API-Key`` header (optional).
 
     Returns:
         tenant_id string.
 
     Raises:
-        HTTPException 401 if token is invalid.
+        HTTPException 401 if credentials are missing (in prod) or invalid.
     """
     cfg = get_config()
-    if not token:
-        if cfg.environment == "dev":
-            return "default"
+
+    # 1. API key (service accounts, CI/CD pipelines)
+    if x_api_key:
+        tenant_id = await _resolve_api_key(request, x_api_key)
+        if tenant_id:
+            return tenant_id
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = _decode_jwt(token)
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
-    if not tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing tenant_id claim",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return str(tenant_id)
+    # 2. JWT bearer token
+    if token:
+        payload = _decode_jwt(token)
+        tenant_id = payload.get("tenant_id") or payload.get("sub")
+        if not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token missing tenant_id claim",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return str(tenant_id)
+
+    # 3. Dev mode fallback
+    if cfg.environment == "dev":
+        return "default"
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated — provide Bearer token or X-API-Key header",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def get_current_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> dict:
-    """Extract the full user info from the JWT bearer token.
+    """Extract the full user info from JWT or API key.
 
-    Returns a minimal user dict if no token is provided in dev mode.
-
-    Args:
-        token: JWT bearer token (optional).
+    Returns a minimal user dict if no credentials are provided in dev mode.
 
     Returns:
-        User payload dict with at minimum: sub, tenant_id.
+        Dict with at minimum: sub, tenant_id, role.
 
     Raises:
-        HTTPException 401 if token is invalid.
+        HTTPException 401 if invalid.
     """
     cfg = get_config()
-    if not token:
-        if cfg.environment == "dev":
-            return {"sub": "dev-user", "tenant_id": "default", "role": "admin"}
+
+    if x_api_key:
+        tenant_id = await _resolve_api_key(request, x_api_key)
+        if tenant_id:
+            return {"sub": f"apikey:{tenant_id}", "tenant_id": tenant_id, "role": "service"}
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return _decode_jwt(token)
+    if token:
+        return _decode_jwt(token)
+
+    if cfg.environment == "dev":
+        return {"sub": "dev-user", "tenant_id": "default", "role": "admin"}
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
