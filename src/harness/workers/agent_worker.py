@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import os
 import sys
-from pathlib import Path
-from typing import Any, Optional
+from datetime import UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def process_run_job_async(run_id: str, config_dict: Optional[dict] = None) -> None:
+async def process_run_job_async(run_id: str, config_dict: dict | None = None) -> None:
     """Process a single agent run job asynchronously.
 
     Initialises all required dependencies (Redis, memory manager, LLM router),
@@ -32,6 +32,7 @@ async def process_run_job_async(run_id: str, config_dict: Optional[dict] = None)
 
     # --- Import harness dependencies ---
     import redis.asyncio as aioredis
+
     from harness.core.config import get_config
 
     cfg = get_config()
@@ -51,19 +52,73 @@ async def process_run_job_async(run_id: str, config_dict: Optional[dict] = None)
         logger.error("Worker: Redis connection failed: %s", exc)
         raise
 
-    # Build a minimal agent factory
+    def _build_agent(agent_type: str) -> Any:
+        """Create a production BaseAgent subclass with shared harness services."""
+        from harness.core.cost_tracker import CostTracker
+        from harness.llm.factory import build_router
+        from harness.safety.pipeline_factory import build_pipeline, get_default_config
+        from harness.tools.code_tools import ApplyPatchTool, LintCodeTool, RunCodeTool
+        from harness.tools.file_tools import ListWorkspaceTool, ReadFileTool, WriteFileTool
+        from harness.tools.registry import ToolRegistry
+
+        safety = build_pipeline(agent_type, get_default_config(agent_type))
+        registry = ToolRegistry(safety_pipeline=safety)
+        for tool in [
+            ReadFileTool(),
+            WriteFileTool(),
+            ListWorkspaceTool(),
+            RunCodeTool(),
+            LintCodeTool(),
+            ApplyPatchTool(),
+        ]:
+            registry.register(tool)
+
+        sql_connection = (
+            config_dict.get("sql_connection_string")
+            or getattr(cfg, "sql_connection_string", "")
+        )
+        if sql_connection:
+            from harness.tools.sql_tools import SQLConnectionConfig, build_sql_tools
+
+            for tool in build_sql_tools(SQLConnectionConfig(connection_string=sql_connection)):
+                registry.register(tool)
+
+        common_kwargs = {
+            "llm_router": build_router(cfg),
+            "memory_manager": _NoopMemory(),
+            "tool_registry": registry,
+            "safety_pipeline": safety,
+            "step_tracer": None,
+            "mlflow_tracer": None,
+            "failure_tracker": None,
+            "audit_logger": None,
+            "event_bus": _RedisStreamEventSink(redis_client),
+            "cost_tracker": CostTracker(
+                redis_client=redis_client,
+                budget_usd_per_tenant=cfg.cost_budget_usd_per_tenant,
+            ),
+            "checkpoint_manager": _NoopCheckpointManager(),
+            "message_bus": None,
+        }
+
+        if agent_type == "sql":
+            from harness.agents.sql_agent import SQLAgent
+
+            return SQLAgent(**common_kwargs)
+        if agent_type == "code":
+            from harness.agents.code_agent import CodeAgent
+
+            return CodeAgent(**common_kwargs)
+        raise ValueError(
+            f"Agent type {agent_type!r} is accepted by the API but has no worker factory. "
+            "Register a native agent or framework adapter before enqueueing this type."
+        )
+
+    # Build an agent factory
     def agent_factory(agent_type: str) -> Any:
         """Create the appropriate agent for the given type."""
-        # Lazy imports to keep startup fast
         try:
-            if agent_type == "sql":
-                from harness.agents.sql_agent import SQLAgent
-                return SQLAgent(config=config_dict)
-            elif agent_type == "code":
-                from harness.agents.code_agent import CodeAgent
-                return CodeAgent(config=config_dict)
-            else:
-                raise ValueError(f"Unknown agent_type: {agent_type!r}")
+            return _build_agent(agent_type)
         except ImportError as exc:
             logger.warning("Agent module not found for %s: %s", agent_type, exc)
             raise RuntimeError(f"Agent '{agent_type}' is not available: {exc}") from exc
@@ -97,15 +152,15 @@ async def process_run_job_async(run_id: str, config_dict: Optional[dict] = None)
 
         # Attempt to mark as failed in Redis
         try:
+            from datetime import datetime
+
             from harness.orchestrator.runner import RunRecord, _run_key
-            import json
-            from datetime import datetime, timezone
 
             raw = await redis_client.get(_run_key(run_id))
             if raw:
                 rec = RunRecord.from_json(raw if isinstance(raw, str) else raw.decode())
                 rec.status = "failed"
-                rec.completed_at = datetime.now(timezone.utc)
+                rec.completed_at = datetime.now(UTC)
                 rec.result = {
                     "run_id": run_id,
                     "output": "",
@@ -128,7 +183,7 @@ async def process_run_job_async(run_id: str, config_dict: Optional[dict] = None)
 # ---------------------------------------------------------------------------
 
 
-def process_run_job(run_id: str, config_dict: Optional[dict] = None) -> None:
+def process_run_job(run_id: str, config_dict: dict | None = None) -> None:
     """Synchronous wrapper called by RQ workers.
 
     RQ enqueues calls to this function. It bridges RQ's synchronous
@@ -152,8 +207,8 @@ def process_run_job(run_id: str, config_dict: Optional[dict] = None) -> None:
 
 
 def start_worker(
-    queues: Optional[list[str]] = None,
-    redis_url: Optional[str] = None,
+    queues: list[str] | None = None,
+    redis_url: str | None = None,
 ) -> None:
     """Start an RQ worker listening on the specified queues.
 
@@ -162,12 +217,13 @@ def start_worker(
         redis_url: Redis URL.  Falls back to config.
     """
     import redis as sync_redis  # type: ignore
-    from rq import Worker, Queue  # type: ignore
+    from rq import Queue, Worker  # type: ignore
+
     from harness.core.config import get_config
 
     cfg = get_config()
     effective_redis_url = redis_url or cfg.redis_url
-    effective_queues = queues or ["default", "agent", "sql", "code", "research"]
+    effective_queues = queues or ["default", "agent", "sql", "code"]
 
     logging.basicConfig(
         level=getattr(logging, cfg.log_level.upper(), logging.INFO),
@@ -186,6 +242,51 @@ def start_worker(
 
     worker = Worker(queue_objects, connection=conn)
     worker.work(with_scheduler=True)
+
+
+class _NoopMemory:
+    """Small memory shim for worker smoke runs when no memory stack is configured."""
+
+    async def push_message(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def get_history(self, *args: Any, **kwargs: Any) -> list:
+        return []
+
+    async def fit_history(self, *args: Any, **kwargs: Any) -> Any:
+        return type("FitHistoryResult", (), {"summary": None, "messages": []})()
+
+    async def smart_retrieve(self, *args: Any, **kwargs: Any) -> str:
+        return ""
+
+
+class _NoopCheckpointManager:
+    async def load(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def save(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+class _RedisStreamEventSink:
+    """Event sink compatible with BaseAgent._emit_event and /runs/{id}/stream."""
+
+    def __init__(self, redis: Any) -> None:
+        self._redis = redis
+
+    async def publish(self, event: Any) -> None:
+        await self._redis.xadd(
+            f"harness:events:{event.run_id}",
+            {
+                "run_id": event.run_id,
+                "step": str(event.step),
+                "event_type": event.event_type,
+                "payload": json.dumps(event.payload, default=str),
+                "timestamp": event.timestamp.isoformat(),
+            },
+            maxlen=1000,
+            approximate=True,
+        )
 
 
 # ---------------------------------------------------------------------------

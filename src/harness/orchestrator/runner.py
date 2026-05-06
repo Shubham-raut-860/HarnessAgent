@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import signal
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +45,10 @@ class RunRecord:
     agent_type: str = ""
     task: str = ""
     status: str = "pending"  # pending | running | completed | failed | cancelled
-    result: Optional[dict] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    result: dict | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     hitl_pending: bool = False
     metadata: dict = field(default_factory=dict)
 
@@ -74,8 +75,8 @@ class RunRecord:
         return json.dumps(self.to_dict(), ensure_ascii=False)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RunRecord":
-        def _dt(v) -> Optional[datetime]:
+    def from_dict(cls, data: dict) -> RunRecord:
+        def _dt(v) -> datetime | None:
             if v is None:
                 return None
             if isinstance(v, datetime):
@@ -92,7 +93,7 @@ class RunRecord:
             task=data.get("task", ""),
             status=data.get("status", "pending"),
             result=data.get("result"),
-            created_at=_dt(data.get("created_at")) or datetime.now(timezone.utc),
+            created_at=_dt(data.get("created_at")) or datetime.now(UTC),
             started_at=_dt(data.get("started_at")),
             completed_at=_dt(data.get("completed_at")),
             hitl_pending=bool(data.get("hitl_pending", False)),
@@ -100,7 +101,7 @@ class RunRecord:
         )
 
     @classmethod
-    def from_json(cls, raw: str) -> "RunRecord":
+    def from_json(cls, raw: str) -> RunRecord:
         return cls.from_dict(json.loads(raw))
 
 
@@ -120,8 +121,8 @@ class AgentRunner:
         redis: Any,
         agent_factory: Any,
         workspace_base: str = "/workspaces",
-        event_bus: Optional[Any] = None,
-        error_collector: Optional[Any] = None,
+        event_bus: Any | None = None,
+        error_collector: Any | None = None,
     ) -> None:
         self._redis = redis
         self._agent_factory = agent_factory
@@ -205,7 +206,7 @@ class AgentRunner:
                             "success": False,
                             "error_message": "Run interrupted by graceful shutdown",
                         }
-                        record.completed_at = datetime.now(timezone.utc)
+                        record.completed_at = datetime.now(UTC)
                         await self.update_run(record)
                 except Exception as exc:
                     logger.debug("Could not mark run %s interrupted: %s", run_id, exc)
@@ -222,7 +223,7 @@ class AgentRunner:
         tenant_id: str,
         agent_type: str,
         task: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> RunRecord:
         """Create and persist a new RunRecord with status=pending."""
         record = RunRecord(
@@ -237,7 +238,7 @@ class AgentRunner:
         )
         return record
 
-    async def get_run(self, run_id: str) -> Optional[RunRecord]:
+    async def get_run(self, run_id: str) -> RunRecord | None:
         """Retrieve a RunRecord by run_id."""
         raw = await self._redis.get(_run_key(run_id))
         if not raw:
@@ -272,7 +273,7 @@ class AgentRunner:
         await self._redis.set(_run_key(record.run_id), record.to_json())
         return record
 
-    async def cancel_run(self, run_id: str) -> Optional[RunRecord]:
+    async def cancel_run(self, run_id: str) -> RunRecord | None:
         """Mark a run as cancelled if it is still pending or running."""
         record = await self.get_run(run_id)
         if record is None:
@@ -280,7 +281,7 @@ class AgentRunner:
         if record.status in ("completed", "failed", "cancelled"):
             return record
         record.status = "cancelled"
-        record.completed_at = datetime.now(timezone.utc)
+        record.completed_at = datetime.now(UTC)
         await self.update_run(record)
         logger.info("Cancelled run %s", run_id)
         return record
@@ -312,13 +313,13 @@ class AgentRunner:
         if self._shutting_down:
             logger.warning("Rejecting run %s — shutdown in progress", run_id)
             record.status = "cancelled"
-            record.completed_at = datetime.now(timezone.utc)
+            record.completed_at = datetime.now(UTC)
             await self.update_run(record)
             return record
 
         # Mark as running and track as in-flight
         record.status = "running"
-        record.started_at = datetime.now(timezone.utc)
+        record.started_at = datetime.now(UTC)
         await self.update_run(record)
         self._inflight.add(run_id)
 
@@ -327,13 +328,7 @@ class AgentRunner:
 
         try:
             agent = self._agent_factory(record.agent_type)
-            agent_result = await agent.run(
-                tenant_id=record.tenant_id,
-                task=record.task,
-                run_id=record.run_id,
-                workspace_path=workspace,
-                metadata=record.metadata,
-            )
+            agent_result = await _run_agent(agent, record, workspace)
 
             record.status = "completed" if getattr(agent_result, "success", False) else "failed"
             record.result = _serialise_result(agent_result)
@@ -363,7 +358,7 @@ class AgentRunner:
         finally:
             self._inflight.discard(run_id)
 
-        record.completed_at = datetime.now(timezone.utc)
+        record.completed_at = datetime.now(UTC)
         await self.update_run(record)
 
         logger.info(
@@ -388,4 +383,64 @@ def _serialise_result(result: Any) -> dict:
         "error_message": getattr(result, "error_message", None),
         "elapsed_seconds": getattr(result, "elapsed_seconds", 0.0),
         "cost_usd": getattr(result, "cost_usd", 0.0),
+        "tool_calls": getattr(result, "tool_calls", 0),
+        "tool_errors": getattr(result, "tool_errors", 0),
+        "guardrail_hits": getattr(result, "guardrail_hits", 0),
+        "handoff_count": getattr(result, "handoff_count", 0),
+        "cache_hits": getattr(result, "cache_hits", 0),
+        "cache_read_tokens": getattr(result, "cache_read_tokens", 0),
     }
+
+
+async def _run_agent(agent: Any, record: RunRecord, workspace: Path) -> Any:
+    """Run either a BaseAgent-style agent or a legacy keyword-style agent."""
+    run = agent.run
+    params = inspect.signature(run).parameters
+
+    # BaseAgent.run(ctx) is the production path. Build the context here so
+    # workers and schedulers invoke the same lifecycle used in direct tests.
+    if "ctx" in params or (
+        "tenant_id" not in params and "task" not in params and len(params) <= 1
+    ):
+        from harness.core.context import AgentContext
+
+        metadata = dict(record.metadata or {})
+        ctx = AgentContext(
+            run_id=record.run_id,
+            tenant_id=record.tenant_id,
+            agent_type=record.agent_type,
+            task=record.task,
+            memory=getattr(agent, "_memory", None),
+            workspace_path=workspace,
+            max_steps=_metadata_int(metadata, "max_steps", 50),
+            max_tokens=_metadata_int(metadata, "max_tokens", 100_000),
+            timeout_seconds=_metadata_float(metadata, "timeout_seconds", 300.0),
+            metadata=metadata,
+        )
+        result = run(ctx)
+    else:
+        result = run(
+            tenant_id=record.tenant_id,
+            task=record.task,
+            run_id=record.run_id,
+            workspace_path=workspace,
+            metadata=record.metadata,
+        )
+
+    if asyncio.iscoroutine(result):
+        return await result
+    return result
+
+
+def _metadata_int(metadata: dict, key: str, default: int) -> int:
+    try:
+        return int(metadata.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _metadata_float(metadata: dict, key: str, default: float) -> float:
+    try:
+        return float(metadata.get(key, default))
+    except (TypeError, ValueError):
+        return default

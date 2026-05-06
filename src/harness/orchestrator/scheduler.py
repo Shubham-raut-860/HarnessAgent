@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-from harness.core.context import AgentResult
+from harness.core.context import AgentResult, StepEvent
 from harness.orchestrator.planner import SubTask, TaskPlan
 
 logger = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ class Scheduler:
                         return_exceptions=True,
                     )
 
-                    for st, result in zip(ready, batch_results):
+                    for st, result in zip(ready, batch_results, strict=True):
                         if isinstance(result, Exception):
                             logger.error(
                                 "Plan %s sub-task '%s' failed after retries: %s",
@@ -194,7 +194,7 @@ class Scheduler:
                             },
                         )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Plan %s timed out after %.1f seconds", plan.plan_id, timeout)
             await self._publish(
                 "plan_timeout", plan.plan_id, {"completed": list(completed_ids)}
@@ -286,6 +286,7 @@ class Scheduler:
         metadata: dict[str, Any] = dict(subtask.metadata)
         metadata["plan_subtask_id"] = subtask.id
         metadata["depends_on"] = subtask.depends_on
+        metadata["handoff_count"] = len(subtask.depends_on)
 
         # Include predecessor result summaries
         for dep_id in subtask.depends_on:
@@ -320,6 +321,12 @@ class Scheduler:
                 error_message=result_data.get("error_message"),
                 elapsed_seconds=result_data.get("elapsed_seconds", 0.0),
                 cost_usd=result_data.get("cost_usd", 0.0),
+                tool_calls=result_data.get("tool_calls", 0),
+                tool_errors=result_data.get("tool_errors", 0),
+                guardrail_hits=result_data.get("guardrail_hits", 0),
+                handoff_count=len(subtask.depends_on),
+                cache_hits=result_data.get("cache_hits", 0),
+                cache_read_tokens=result_data.get("cache_read_tokens", 0),
             )
 
         except Exception as exc:
@@ -335,15 +342,12 @@ class Scheduler:
         if self._message_bus is None:
             return
         try:
-            from datetime import datetime, timezone
-            from harness.core.context import StepEvent
-
             event = StepEvent(
                 run_id=f"plan:{plan_id}",
                 step=0,
                 event_type=event_type,
                 payload={"plan_id": plan_id, **payload},
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
             result = self._message_bus.publish(event)
             if asyncio.iscoroutine(result):

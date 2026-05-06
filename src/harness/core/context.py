@@ -5,14 +5,11 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any
 
 from harness.core.errors import BudgetExceeded, FailureClass
-
-if TYPE_CHECKING:
-    from harness.memory.manager import MemoryManager
 
 
 @dataclass
@@ -75,18 +72,18 @@ class StepEvent:
     # ------------------------------------------------------------------
 
     @classmethod
-    def started(cls, ctx: AgentContext) -> "StepEvent":
+    def started(cls, ctx: AgentContext) -> StepEvent:
         """Build a 'started' event from the given context."""
         return cls(
             run_id=ctx.run_id,
             step=ctx.step_count,
             event_type="started",
             payload={"task": ctx.task, "agent_type": ctx.agent_type},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
-    def llm_called(cls, ctx: AgentContext, response: LLMResponse) -> "StepEvent":
+    def llm_called(cls, ctx: AgentContext, response: LLMResponse) -> StepEvent:
         """Build an 'llm_call' event after receiving an LLM response."""
         return cls(
             run_id=ctx.run_id,
@@ -100,13 +97,13 @@ class StepEvent:
                 "cached": response.cached,
                 "tool_calls": len(response.tool_calls),
             },
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
     def tool_called(
         cls, ctx: AgentContext, call: ToolCall, result: ToolResult
-    ) -> "StepEvent":
+    ) -> StepEvent:
         """Build a 'tool_call' event after executing a tool."""
         return cls(
             run_id=ctx.run_id,
@@ -119,22 +116,22 @@ class StepEvent:
                 "is_error": result.is_error,
                 "error": result.error,
             },
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
-    def completed(cls, ctx: AgentContext, output: str) -> "StepEvent":
+    def completed(cls, ctx: AgentContext, output: str) -> StepEvent:
         """Build a 'completed' event when the agent finishes successfully."""
         return cls(
             run_id=ctx.run_id,
             step=ctx.step_count,
             event_type="completed",
             payload={"output": output, "elapsed_seconds": ctx.elapsed_seconds},
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     @classmethod
-    def failed(cls, ctx: AgentContext, error: str) -> "StepEvent":
+    def failed(cls, ctx: AgentContext, error: str) -> StepEvent:
         """Build a 'failed' event when the agent terminates with an error."""
         return cls(
             run_id=ctx.run_id,
@@ -145,7 +142,7 @@ class StepEvent:
                 "failure_class": ctx.failure_class,
                 "elapsed_seconds": ctx.elapsed_seconds,
             },
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
 
@@ -163,6 +160,12 @@ class AgentResult:
     elapsed_seconds: float = 0.0
     cost_usd: float = 0.0
     mlflow_run_id: str | None = None
+    tool_calls: int = 0
+    tool_errors: int = 0
+    guardrail_hits: int = 0
+    handoff_count: int = 0
+    cache_hits: int = 0
+    cache_read_tokens: int = 0
 
 
 @dataclass
@@ -180,11 +183,11 @@ class AgentContext:
     timeout_seconds: float = 300.0
     step_count: int = 0
     token_count: int = 0
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
     trace_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     failed: bool = False
-    failure_class: Optional[str] = None
+    failure_class: str | None = None
 
     # ------------------------------------------------------------------
     # Factory
@@ -203,7 +206,7 @@ class AgentContext:
         max_tokens: int = 100_000,
         timeout_seconds: float = 300.0,
         metadata: dict[str, Any] | None = None,
-    ) -> "AgentContext":
+    ) -> AgentContext:
         """Construct a new AgentContext with auto-generated run_id and trace_id."""
         return cls(
             run_id=uuid.uuid4().hex,
@@ -265,4 +268,4 @@ class AgentContext:
     @property
     def elapsed_seconds(self) -> float:
         """Return wall-clock seconds elapsed since this run started."""
-        return (datetime.now(timezone.utc) - self.started_at).total_seconds()
+        return (datetime.now(UTC) - self.started_at).total_seconds()
