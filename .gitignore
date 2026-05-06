@@ -62,3 +62,7 @@ run_logs/
 models/*.gguf
 models/*.bin
 models/*.safetensors
+
+# Downloaded browser binaries and generated output artifacts
+/chrome/
+/output/
