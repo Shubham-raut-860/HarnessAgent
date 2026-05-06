@@ -133,7 +133,9 @@ async def test_run_respects_token_budget(agent_context):
 
 @pytest.mark.asyncio
 async def test_safety_violation_stops_run(agent_context):
-    from guardrail.result import Decision, GuardResult
+    guardrail_result = pytest.importorskip("guardrail.result", reason="guardrail not installed")
+    Decision = guardrail_result.Decision
+    GuardResult = guardrail_result.GuardResult
     mock_pipeline = MagicMock()
     blocked = GuardResult(decision=Decision.BLOCK, reason="PII", source="pii")
     allowed = GuardResult.allow(source="test")

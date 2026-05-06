@@ -48,6 +48,7 @@ class AutoGenAdapter(FrameworkAdapter):
         max_turns: int = 10,
         event_bus: "EventBus | None" = None,
     ) -> None:
+        super().__init__()
         self._initiator = initiator_agent
         self._recipient = recipient_agent_or_groupchat
         self._max_turns = max_turns
@@ -82,7 +83,10 @@ class AutoGenAdapter(FrameworkAdapter):
         task: str = input.get("task") or input.get("message") or str(input)
 
         self._messages = []
-        step_counter: list[int] = [0]  # mutable container for closure capture
+        step_counter: list[int] = [0]
+
+        # --- Inject MCP tools into both agents before the conversation ---
+        await self._inject_mcp_tools()
 
         # --- Monkey-patch recipient.receive to capture messages in order ---
         original_receive = self._recipient.receive
@@ -174,6 +178,44 @@ class AutoGenAdapter(FrameworkAdapter):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    async def _inject_mcp_tools(self) -> None:
+        """Register MCP tools with both AutoGen agents before the conversation."""
+        mcp_tools = await self._resolve_mcp_tools()
+        if not mcp_tools:
+            return
+
+        for tool_schema in mcp_tools:
+            mcp_client = tool_schema.get("_mcp_client")
+            tool_name = tool_schema.get("name", "")
+            if not tool_name or mcp_client is None:
+                continue
+
+            def _make_fn(name: str, client: Any) -> Any:
+                def _tool_fn(**kwargs: Any) -> str:
+                    import asyncio
+                    try:
+                        loop = asyncio.get_event_loop()
+                        result = loop.run_until_complete(client.call_tool(name, kwargs))
+                    except RuntimeError:
+                        result = asyncio.run(client.call_tool(name, kwargs))
+                    return str(result)
+
+                _tool_fn.__name__ = name
+                _tool_fn.__doc__ = tool_schema.get("description", "")
+                return _tool_fn
+
+            fn = _make_fn(tool_name, mcp_client)
+            for agent in (self._initiator, self._recipient):
+                if hasattr(agent, "register_function"):
+                    try:
+                        agent.register_function(function_map={tool_name: fn})
+                    except Exception as exc:
+                        logger.debug("AutoGen register_function failed for %r: %s", tool_name, exc)
+
+        logger.info(
+            "AutoGenAdapter: injected %d MCP tool(s) into agents", len(mcp_tools)
+        )
 
     async def _publish(self, event: "StepEvent") -> None:
         """Fire-and-forget publish to the optional EventBus."""

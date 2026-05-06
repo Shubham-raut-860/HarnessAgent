@@ -49,6 +49,7 @@ class CrewAIAdapter(FrameworkAdapter):
         verbose: bool = False,
         event_bus: "EventBus | None" = None,
     ) -> None:
+        super().__init__()
         self._crew = crew
         self._verbose = verbose
         self._event_bus = event_bus
@@ -85,6 +86,9 @@ class CrewAIAdapter(FrameworkAdapter):
         self._step_count = 0
         self._final_output = ""
         self._kickoff_done = False
+
+        # --- Inject MCP tools into crew agents before kickoff ---
+        await self._inject_mcp_tools()
 
         # --- Wrap step_callback to capture individual agent steps ---
         original_callback = getattr(self._crew, "step_callback", None)
@@ -172,6 +176,52 @@ class CrewAIAdapter(FrameworkAdapter):
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    async def _inject_mcp_tools(self) -> None:
+        """Add MCP tools to every agent in the crew before kickoff."""
+        mcp_tools = await self._resolve_mcp_tools()
+        if not mcp_tools or not hasattr(self._crew, "agents"):
+            return
+
+        try:
+            from crewai.tools import BaseTool  # type: ignore
+            import pydantic
+
+            for tool_schema in mcp_tools:
+                mcp_client = tool_schema.pop("_mcp_client", None)
+                tool_name = tool_schema["name"]
+                tool_desc = tool_schema.get("description", "")
+
+                def _make_tool(name: str, client: Any, schema: dict) -> Any:
+                    class _MCPTool(BaseTool):
+                        name: str = name
+                        description: str = schema.get("description", "")
+
+                        def _run(self, **kwargs: Any) -> str:
+                            import asyncio
+                            loop = asyncio.get_event_loop()
+                            result = loop.run_until_complete(
+                                client.call_tool(name, kwargs)
+                            )
+                            return str(result)
+
+                    return _MCPTool()
+
+                crewai_tool = _make_tool(tool_name, mcp_client, tool_schema)
+                for agent in self._crew.agents:
+                    if not hasattr(agent, "tools") or agent.tools is None:
+                        agent.tools = []
+                    agent.tools.append(crewai_tool)
+
+            logger.info(
+                "CrewAIAdapter: injected %d MCP tool(s) into %d agent(s)",
+                len(mcp_tools),
+                len(getattr(self._crew, "agents", [])),
+            )
+        except ImportError:
+            logger.debug("crewai not installed — MCP injection skipped")
+        except Exception as exc:
+            logger.warning("CrewAIAdapter MCP injection failed: %s", exc)
 
     async def _publish(self, event: "StepEvent") -> None:
         """Fire-and-forget publish to the optional EventBus."""
