@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
-import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from datetime import UTC, datetime
+from typing import Any
 
-from harness.eval.datasets import EvalCase, EvalDataset
-from harness.eval.scorers import ScoreResult, score_exact_match, score_success_rate
+from harness.core.context import AgentResult
+from harness.eval.datasets import EvalCase, EvalDataset, MultiAgentEvalDataset
+from harness.eval.diagnostics import EvalDiagnostics, build_diagnostics
+from harness.eval.scorers import ScoreResult, score_exact_match
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,8 @@ class EvalReport:
     scores: dict[str, float] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
     prompt_version: str = "unknown"
-    run_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    run_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    diagnostics: EvalDiagnostics | None = None
 
     # ------------------------------------------------------------------
     # Formatting
@@ -71,8 +75,8 @@ class EvalReport:
             "",
             "## Summary",
             "",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| Total cases | {self.total_cases} |",
             f"| Passed | {self.passed} |",
             f"| Failed | {self.failed} |",
@@ -97,9 +101,12 @@ class EvalReport:
                 lines.append(f"| `{case_id}` | {score:.2f} | {error_short} |")
             lines.append("")
 
+        if self.diagnostics is not None:
+            lines += ["", self.diagnostics.to_markdown(), ""]
+
         return "\n".join(lines)
 
-    def compare(self, other: "EvalReport") -> str:
+    def compare(self, other: EvalReport) -> str:
         """Produce a diff summary comparing this report to *other*.
 
         Args:
@@ -126,8 +133,8 @@ class EvalReport:
         lines = [
             f"## Comparison: {self.dataset_name} vs baseline",
             "",
-            f"| Metric | Baseline | New | Delta |",
-            f"|--------|----------|-----|-------|",
+            "| Metric | Baseline | New | Delta |",
+            "|--------|----------|-----|-------|",
             f"| Success rate | {other.success_rate:.1%} | {self.success_rate:.1%} | {fmt_delta(delta_sr, '%', True)} |",
             f"| Avg steps | {other.avg_steps:.1f} | {self.avg_steps:.1f} | {fmt_delta(delta_steps, '', False)} |",
             f"| Avg tokens | {other.avg_tokens:.0f} | {self.avg_tokens:.0f} | {fmt_delta(delta_tokens, '', False)} |",
@@ -177,6 +184,7 @@ class EvalReport:
             "errors": self.errors,
             "prompt_version": self.prompt_version,
             "run_at": self.run_at.isoformat(),
+            "diagnostics": self.diagnostics.to_dict() if self.diagnostics else None,
         }
 
 
@@ -201,7 +209,7 @@ class EvalRunner:
     def __init__(
         self,
         agent_runner: Any,
-        llm_provider: Optional[Any] = None,
+        llm_provider: Any | None = None,
     ) -> None:
         self._runner = agent_runner
         self._llm = llm_provider
@@ -215,7 +223,7 @@ class EvalRunner:
         dataset: EvalDataset,
         tenant_id: str = "eval",
         concurrency: int = 3,
-        scorer: Optional[Callable] = None,
+        scorer: Callable | None = None,
         pass_threshold: float = _PASS_THRESHOLD,
         prompt_version: str = "unknown",
     ) -> EvalReport:
@@ -253,15 +261,34 @@ class EvalRunner:
         total_tokens: list[float] = []
         total_cost: list[float] = []
         total_latency: list[float] = []
+        diagnostic_records: list[dict[str, Any]] = []
 
-        for case, result in zip(dataset.cases, results):
+        for case, result in zip(dataset.cases, results, strict=True):
             if isinstance(result, Exception):
                 scores[case.case_id] = 0.0
                 errors[case.case_id] = str(result)
+                diagnostic_records.append(
+                    {
+                        "case_id": case.case_id,
+                        "agent_type": case.agent_type,
+                        "score": 0.0,
+                        "result": None,
+                        "error": str(result),
+                    }
+                )
                 logger.warning("Case %s raised exception: %s", case.case_id, result)
             else:
                 score_val, agent_result = result
                 scores[case.case_id] = score_val
+                diagnostic_records.append(
+                    {
+                        "case_id": case.case_id,
+                        "agent_type": case.agent_type,
+                        "score": score_val,
+                        "result": agent_result,
+                        "error": "",
+                    }
+                )
                 if agent_result is not None:
                     total_steps.append(float(getattr(agent_result, "steps", 0)))
                     total_tokens.append(float(getattr(agent_result, "tokens", 0)))
@@ -278,6 +305,12 @@ class EvalRunner:
         def _safe_avg(lst: list[float]) -> float:
             return sum(lst) / len(lst) if lst else 0.0
 
+        diagnostics = build_diagnostics(
+            dataset.name,
+            diagnostic_records,
+            pass_threshold=pass_threshold,
+        )
+
         return EvalReport(
             dataset_name=dataset.name,
             agent_type=dataset.agent_type,
@@ -292,7 +325,176 @@ class EvalRunner:
             scores=scores,
             errors=errors,
             prompt_version=prompt_version,
-            run_at=datetime.now(timezone.utc),
+            run_at=datetime.now(UTC),
+            diagnostics=diagnostics,
+        )
+
+    async def run_multi_agent(
+        self,
+        dataset: MultiAgentEvalDataset,
+        tenant_id: str = "eval",
+        concurrency: int = 2,
+        scorer: Callable | None = None,
+        pass_threshold: float = _PASS_THRESHOLD,
+        prompt_version: str = "unknown",
+        timeout: float = 300.0,
+    ) -> EvalReport:
+        """Execute multi-agent DAG eval cases through the Scheduler.
+
+        Each case is converted into a TaskPlan and run through the production
+        scheduler. The case-level score evaluates the combined final outputs;
+        diagnostics also include each sub-agent's resource use and failure stage.
+        """
+        from harness.orchestrator.scheduler import Scheduler
+
+        semaphore = asyncio.Semaphore(concurrency)
+        scheduler = Scheduler(agent_runner=self._runner)
+
+        async def _run_plan_case(case):
+            async with semaphore:
+                plan = case.to_task_plan()
+                results = await scheduler.execute_plan(
+                    plan,
+                    tenant_id=tenant_id,
+                    timeout=float(case.metadata.get("timeout", timeout)),
+                )
+                output = "\n\n".join(
+                    getattr(result, "output", "")
+                    for result in results.values()
+                    if getattr(result, "output", "")
+                )
+                success = bool(results) and all(
+                    getattr(result, "success", False)
+                    for result in results.values()
+                )
+                synthetic = AgentResult(
+                    run_id=plan.plan_id,
+                    output=output,
+                    steps=sum(int(getattr(result, "steps", 0)) for result in results.values()),
+                    tokens=sum(int(getattr(result, "tokens", 0)) for result in results.values()),
+                    success=success,
+                    error_message="" if success else "One or more subtasks failed",
+                    elapsed_seconds=sum(
+                        float(getattr(result, "elapsed_seconds", 0.0))
+                        for result in results.values()
+                    ),
+                    cost_usd=sum(
+                        float(getattr(result, "cost_usd", 0.0))
+                        for result in results.values()
+                    ),
+                    tool_calls=sum(
+                        int(getattr(result, "tool_calls", 0))
+                        for result in results.values()
+                    ),
+                    tool_errors=sum(
+                        int(getattr(result, "tool_errors", 0))
+                        for result in results.values()
+                    ),
+                    guardrail_hits=sum(
+                        int(getattr(result, "guardrail_hits", 0))
+                        for result in results.values()
+                    ),
+                    handoff_count=sum(
+                        int(getattr(result, "handoff_count", 0))
+                        for result in results.values()
+                    ),
+                    cache_hits=sum(
+                        int(getattr(result, "cache_hits", 0))
+                        for result in results.values()
+                    ),
+                    cache_read_tokens=sum(
+                        int(getattr(result, "cache_read_tokens", 0))
+                        for result in results.values()
+                    ),
+                )
+                score = await self._score(case, output, synthetic, scorer)
+                subtask_records = []
+                for subtask in plan.subtasks:
+                    result = results.get(subtask.id)
+                    subtask_records.append(
+                        {
+                            "case_id": f"{case.case_id}/{subtask.id}",
+                            "agent_type": subtask.agent_type,
+                            "score": 1.0 if getattr(result, "success", False) else 0.0,
+                            "result": result,
+                            "error": getattr(result, "error_message", "") if result else "missing result",
+                        }
+                    )
+                return score, synthetic, subtask_records
+
+        raw_results = await asyncio.gather(
+            *[_run_plan_case(case) for case in dataset.cases],
+            return_exceptions=True,
+        )
+
+        scores: dict[str, float] = {}
+        errors: dict[str, str] = {}
+        total_steps: list[float] = []
+        total_tokens: list[float] = []
+        total_cost: list[float] = []
+        total_latency: list[float] = []
+        diagnostic_records: list[dict[str, Any]] = []
+
+        for case, raw in zip(dataset.cases, raw_results, strict=True):
+            if isinstance(raw, Exception):
+                scores[case.case_id] = 0.0
+                errors[case.case_id] = str(raw)
+                diagnostic_records.append(
+                    {
+                        "case_id": case.case_id,
+                        "agent_type": "multi",
+                        "score": 0.0,
+                        "result": None,
+                        "error": str(raw),
+                    }
+                )
+                continue
+
+            score_val, agent_result, subtask_records = raw
+            scores[case.case_id] = score_val
+            if score_val < pass_threshold:
+                errors[case.case_id] = getattr(agent_result, "error_message", "") or "score below threshold"
+            total_steps.append(float(agent_result.steps))
+            total_tokens.append(float(agent_result.tokens))
+            total_cost.append(float(agent_result.cost_usd))
+            total_latency.append(float(agent_result.elapsed_seconds))
+            diagnostic_records.append(
+                {
+                    "case_id": case.case_id,
+                    "agent_type": "multi",
+                    "score": score_val,
+                    "result": agent_result,
+                    "error": "",
+                }
+            )
+            diagnostic_records.extend(subtask_records)
+
+        passed = sum(1 for score in scores.values() if score >= pass_threshold)
+
+        def _safe_avg(values: list[float]) -> float:
+            return sum(values) / len(values) if values else 0.0
+
+        diagnostics = build_diagnostics(
+            dataset.name,
+            diagnostic_records,
+            pass_threshold=pass_threshold,
+        )
+        return EvalReport(
+            dataset_name=dataset.name,
+            agent_type="multi",
+            total_cases=len(dataset.cases),
+            passed=passed,
+            failed=len(dataset.cases) - passed,
+            success_rate=passed / max(len(dataset.cases), 1),
+            avg_steps=_safe_avg(total_steps),
+            avg_tokens=_safe_avg(total_tokens),
+            avg_cost_usd=_safe_avg(total_cost),
+            avg_latency_seconds=_safe_avg(total_latency),
+            scores=scores,
+            errors=errors,
+            prompt_version=prompt_version,
+            run_at=datetime.now(UTC),
+            diagnostics=diagnostics,
         )
 
     # ------------------------------------------------------------------
@@ -345,7 +547,7 @@ class EvalRunner:
         self,
         case: EvalCase,
         tenant_id: str,
-        scorer: Optional[Callable],
+        scorer: Callable | None,
         semaphore: asyncio.Semaphore,
     ) -> tuple[float, Any]:
         """Execute a single EvalCase and return (score, agent_result)."""
@@ -355,6 +557,7 @@ class EvalRunner:
                     tenant_id=tenant_id,
                     agent_type=case.agent_type,
                     task=case.task,
+                    metadata=case.metadata,
                 )
             except Exception as exc:
                 logger.warning(
@@ -367,34 +570,64 @@ class EvalRunner:
             return score, agent_result
 
     async def _invoke_runner(
-        self, tenant_id: str, agent_type: str, task: str
+        self,
+        tenant_id: str,
+        agent_type: str,
+        task: str,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
         """Invoke the agent runner using the most appropriate interface."""
-        # Protocol 1: runner.run(tenant_id, agent_type, task)
+        metadata = metadata or {}
+
+        # Protocol 1: production AgentRunner lifecycle.
+        if hasattr(self._runner, "create_run") and hasattr(self._runner, "execute_run"):
+            record = await self._maybe_await(
+                self._runner.create_run(
+                    tenant_id=tenant_id,
+                    agent_type=agent_type,
+                    task=task,
+                    metadata=metadata,
+                )
+            )
+            updated = await self._maybe_await(self._runner.execute_run(record.run_id))
+            return _record_to_agent_result(updated)
+
+        # Protocol 2: runner.run(tenant_id, agent_type, task[, metadata])
         if hasattr(self._runner, "run") and callable(self._runner.run):
-            result = self._runner.run(tenant_id, agent_type, task)
+            params = inspect.signature(self._runner.run).parameters
+            if "metadata" in params:
+                result = self._runner.run(tenant_id, agent_type, task, metadata=metadata)
+            else:
+                result = self._runner.run(tenant_id, agent_type, task)
             if asyncio.iscoroutine(result):
                 return await result
             return result
 
-        # Protocol 2: runner is a coroutine function itself
+        # Protocol 3: runner is a coroutine function itself
         if asyncio.iscoroutinefunction(self._runner):
-            return await self._runner(tenant_id=tenant_id, agent_type=agent_type, task=task)
+            kwargs = _runner_kwargs(self._runner, tenant_id, agent_type, task, metadata)
+            return await self._runner(**kwargs)
 
-        # Protocol 3: synchronous callable
+        # Protocol 4: synchronous callable
         if callable(self._runner):
-            return self._runner(tenant_id=tenant_id, agent_type=agent_type, task=task)
+            kwargs = _runner_kwargs(self._runner, tenant_id, agent_type, task, metadata)
+            return self._runner(**kwargs)
 
         raise TypeError(
             f"agent_runner does not expose a callable interface: {type(self._runner)}"
         )
+
+    async def _maybe_await(self, value: Any) -> Any:
+        if asyncio.iscoroutine(value):
+            return await value
+        return value
 
     async def _score(
         self,
         case: EvalCase,
         output: str,
         agent_result: Any,
-        scorer: Optional[Callable],
+        scorer: Callable | None,
     ) -> float:
         """Compute a score for the given case and output."""
         if scorer is not None:
@@ -435,3 +668,52 @@ class EvalRunner:
             prompt_version=config.get("prompt_version", label),
         )
         return report
+
+
+def _runner_kwargs(
+    fn: Any,
+    tenant_id: str,
+    agent_type: str,
+    task: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """Build kwargs for a runner callable without forcing metadata support."""
+    kwargs: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "agent_type": agent_type,
+        "task": task,
+    }
+    try:
+        params = inspect.signature(fn).parameters
+        accepts_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in params.values()
+        )
+        if accepts_kwargs or "metadata" in params:
+            kwargs["metadata"] = metadata
+    except (TypeError, ValueError):
+        kwargs["metadata"] = metadata
+    return kwargs
+
+
+def _record_to_agent_result(record: Any) -> AgentResult:
+    """Convert a RunRecord-like object to AgentResult for eval aggregation."""
+    result_data = getattr(record, "result", None) or {}
+    return AgentResult(
+        run_id=result_data.get("run_id", getattr(record, "run_id", "")),
+        output=result_data.get("output", ""),
+        steps=int(result_data.get("steps", 0) or 0),
+        tokens=int(result_data.get("tokens", 0) or 0),
+        success=bool(result_data.get("success", getattr(record, "status", "") == "completed")),
+        failure_class=result_data.get("failure_class"),
+        error_message=result_data.get("error_message"),
+        elapsed_seconds=float(result_data.get("elapsed_seconds", 0.0) or 0.0),
+        cost_usd=float(result_data.get("cost_usd", 0.0) or 0.0),
+        mlflow_run_id=result_data.get("mlflow_run_id"),
+        tool_calls=int(result_data.get("tool_calls", 0) or 0),
+        tool_errors=int(result_data.get("tool_errors", 0) or 0),
+        guardrail_hits=int(result_data.get("guardrail_hits", 0) or 0),
+        handoff_count=int(result_data.get("handoff_count", 0) or 0),
+        cache_hits=int(result_data.get("cache_hits", 0) or 0),
+        cache_read_tokens=int(result_data.get("cache_read_tokens", 0) or 0),
+    )

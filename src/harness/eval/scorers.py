@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +231,9 @@ _DEFAULT_RUBRIC = (
 async def score_llm_judge(
     task: str,
     output: str,
-    expected: Optional[str],
+    expected: str | None,
     llm_provider: Any,
-    rubric: Optional[str] = None,
+    rubric: str | None = None,
 ) -> ScoreResult:
     """Use an LLM to evaluate agent output quality on a 0-1 scale.
 

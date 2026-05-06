@@ -6,7 +6,7 @@ import json
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 
 @dataclass
@@ -25,7 +25,7 @@ class EvalCase:
     case_id: str
     agent_type: str
     task: str
-    expected_output: Optional[str] = None
+    expected_output: str | None = None
     metadata: dict = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
 
@@ -41,7 +41,7 @@ class EvalCase:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EvalCase":
+    def from_dict(cls, data: dict) -> EvalCase:
         """Deserialise from a dict (e.g. loaded from JSONL)."""
         return cls(
             case_id=data["case_id"],
@@ -73,9 +73,9 @@ class EvalDataset:
 
     def filter(
         self,
-        tags: Optional[list[str]] = None,
-        n: Optional[int] = None,
-    ) -> "EvalDataset":
+        tags: list[str] | None = None,
+        n: int | None = None,
+    ) -> EvalDataset:
         """Return a new EvalDataset containing only cases matching the given tags.
 
         Args:
@@ -94,7 +94,7 @@ class EvalDataset:
             filtered = filtered[:n]
         return EvalDataset(name=self.name, agent_type=self.agent_type, cases=filtered)
 
-    def sample(self, n: int) -> "EvalDataset":
+    def sample(self, n: int) -> EvalDataset:
         """Return a new EvalDataset with n cases randomly sampled without replacement.
 
         Args:
@@ -112,7 +112,7 @@ class EvalDataset:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_jsonl(cls, path: str) -> "EvalDataset":
+    def from_jsonl(cls, path: str) -> EvalDataset:
         """Load a dataset from a JSONL file.
 
         Each line must be a JSON object matching the EvalCase schema.
@@ -176,6 +176,117 @@ class EvalDataset:
             f"EvalDataset(name={self.name!r}, agent_type={self.agent_type!r}, "
             f"cases={len(self.cases)})"
         )
+
+
+@dataclass
+class MultiAgentEvalCase:
+    """Evaluation case for a planned multi-agent DAG.
+
+    ``subtasks`` is a list of dictionaries with the same shape as
+    :class:`harness.orchestrator.planner.SubTask`: id, agent_type, task,
+    depends_on, and optional metadata. Keeping it dict-backed makes JSONL
+    fixtures easy to edit by hand.
+    """
+
+    case_id: str
+    task: str
+    subtasks: list[dict[str, Any]]
+    expected_output: str | None = None
+    metadata: dict = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "case_id": self.case_id,
+            "task": self.task,
+            "subtasks": self.subtasks,
+            "expected_output": self.expected_output,
+            "metadata": self.metadata,
+            "tags": self.tags,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MultiAgentEvalCase:
+        return cls(
+            case_id=data["case_id"],
+            task=data["task"],
+            subtasks=list(data.get("subtasks", [])),
+            expected_output=data.get("expected_output"),
+            metadata=data.get("metadata", {}),
+            tags=data.get("tags", []),
+        )
+
+    def to_task_plan(self):
+        """Convert this case into a validated TaskPlan."""
+        from harness.orchestrator.planner import SubTask, TaskPlan
+
+        subtasks = [
+            SubTask(
+                id=str(item["id"]),
+                agent_type=str(item["agent_type"]),
+                task=str(item["task"]),
+                depends_on=[str(dep) for dep in item.get("depends_on", [])],
+                metadata=dict(item.get("metadata", {})),
+            )
+            for item in self.subtasks
+        ]
+        return TaskPlan(
+            plan_id=f"eval_{self.case_id}",
+            original_task=self.task,
+            subtasks=subtasks,
+        )
+
+
+@dataclass
+class MultiAgentEvalDataset:
+    """A named collection of multi-agent plan evaluation cases."""
+
+    name: str
+    cases: list[MultiAgentEvalCase]
+
+    def filter(
+        self,
+        tags: list[str] | None = None,
+        n: int | None = None,
+    ) -> MultiAgentEvalDataset:
+        filtered = self.cases
+        if tags:
+            tag_set = set(tags)
+            filtered = [case for case in filtered if tag_set.intersection(case.tags)]
+        if n is not None:
+            filtered = filtered[:n]
+        return MultiAgentEvalDataset(name=self.name, cases=filtered)
+
+    def to_jsonl(self, path: str) -> None:
+        p = Path(path)
+        with p.open("w", encoding="utf-8") as fh:
+            for case in self.cases:
+                fh.write(json.dumps(case.to_dict(), ensure_ascii=False) + "\n")
+
+    @classmethod
+    def from_jsonl(cls, path: str) -> MultiAgentEvalDataset:
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"MultiAgentEvalDataset file not found: {path}")
+        cases: list[MultiAgentEvalCase] = []
+        with p.open("r", encoding="utf-8") as fh:
+            for line_num, line in enumerate(fh, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    cases.append(MultiAgentEvalCase.from_dict(json.loads(line)))
+                except (json.JSONDecodeError, KeyError) as exc:
+                    raise ValueError(
+                        f"Invalid JSONL at {path}:{line_num}: {exc}"
+                    ) from exc
+        return cls(name=p.stem, cases=cases)
+
+    def __len__(self) -> int:
+        return len(self.cases)
+
+    def __iter__(self):
+        return iter(self.cases)
 
 
 # ---------------------------------------------------------------------------
@@ -244,5 +355,53 @@ CODE_EVAL_CASES: list[EvalCase] = [
         task="Implement a binary search algorithm with tests",
         expected_output="def binary_search",
         tags=["algorithm", "search"],
+    ),
+]
+
+
+MULTI_AGENT_EVAL_CASES: list[MultiAgentEvalCase] = [
+    MultiAgentEvalCase(
+        case_id="multi_01",
+        task="Investigate data quality, then write a concise remediation plan.",
+        expected_output="remediation",
+        tags=["sql", "code", "handoff"],
+        subtasks=[
+            {
+                "id": "inspect_schema",
+                "agent_type": "sql",
+                "task": "Inspect available tables and identify likely data quality risks.",
+                "depends_on": [],
+                "metadata": {"eval_role": "data_inspector"},
+            },
+            {
+                "id": "draft_plan",
+                "agent_type": "code",
+                "task": "Turn the data quality risks into a concise remediation checklist.",
+                "depends_on": ["inspect_schema"],
+                "metadata": {"eval_role": "remediation_writer"},
+            },
+        ],
+    ),
+    MultiAgentEvalCase(
+        case_id="multi_02",
+        task="Analyze a code task, run a verification step, and summarize release risk.",
+        expected_output="risk",
+        tags=["code", "review", "verification"],
+        subtasks=[
+            {
+                "id": "implement",
+                "agent_type": "code",
+                "task": "Implement a small utility function and include a smoke test.",
+                "depends_on": [],
+                "metadata": {"eval_role": "implementer"},
+            },
+            {
+                "id": "review",
+                "agent_type": "code",
+                "task": "Review the implementation output and summarize release risk.",
+                "depends_on": ["implement"],
+                "metadata": {"eval_role": "reviewer"},
+            },
+        ],
     ),
 ]
