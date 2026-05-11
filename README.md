@@ -2,11 +2,12 @@
 
 Production-grade agent harness for building, running, observing, and self-improving AI agents. Bring your own framework or use the native SQL and Code agents. Memory, safety, tracing, and failure recovery come included.
 
+[![PyPI](https://img.shields.io/pypi/v/agent-haas?color=blue&label=PyPI)](https://pypi.org/project/agent-haas/)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-async-green?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Tests](https://img.shields.io/badge/tests-152%20passing-brightgreen)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Models](https://img.shields.io/badge/LLMs-Claude%20%7C%20GPT--5%20%7C%20vLLM%20%7C%20llama.cpp-purple)](ui/docs.html)
+[![Models](https://img.shields.io/badge/LLMs-Claude%20%7C%20GPT--5%20%7C%20vLLM%20%7C%20llama.cpp-purple)](https://thepradip.github.io/HarnessAgent-docs/)
 
 ---
 
