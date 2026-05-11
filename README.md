@@ -226,7 +226,7 @@ docker compose --profile local-cpu up -d llamacpp
 
 ```bash
 brew install redis && brew services start redis
-pip install harnessagent[vector,observe,mcp]
+pip install agent-haas[vector,observe,mcp]
 uvicorn harness.api.main:create_app --factory --port 8000
 # Open http://localhost:8000/ for the dashboard
 ```

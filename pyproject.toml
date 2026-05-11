@@ -3,18 +3,19 @@ requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "agentura"
+name = "agent-haas"
 version = "0.1.0"
-description = "Production-grade multi-agent harness with LLM routing, memory, safety, and observability"
+description = "Harness as a Service — production-grade multi-agent harness with LLM routing, paged context, hierarchical tracing, safety, and self-improvement"
 authors = ["thepradip <pradiptivhale@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/thepradip/HarnessAgent"
 repository = "https://github.com/thepradip/HarnessAgent"
-keywords = ["llm", "agent", "multi-agent", "langchain", "autogen", "crewai", "langgraph", "openai", "anthropic"]
+documentation = "https://thepradip.github.io/HarnessAgent-docs/"
+keywords = ["llm", "agent", "multi-agent", "haas", "harness", "autogen", "crewai", "langgraph", "openai", "anthropic", "tracing", "observability"]
 packages = [{include = "harness", from = "src"}]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
