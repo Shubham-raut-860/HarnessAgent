@@ -1,0 +1,144 @@
+{
+  "job_description": {
+    "title": "Senior Python Backend Engineer",
+    "summary": "We are seeking a Senior Python Backend Engineer to design, build, and scale high-performance backend systems. You will work on API-driven services, distributed systems, and integrations with modern AI/LLM platforms. This is a fully remote role offering competitive compensation and the opportunity to work with cutting-edge technologies in a collaborative engineering environment.",
+    "required_skills": [
+      "5+ years of professional Python development",
+      "Strong experience with FastAPI",
+      "Asynchronous programming using asyncio",
+      "PostgreSQL database design and optimization",
+      "Redis for caching and messaging",
+      "Docker containerization",
+      "Kubernetes (k8s) orchestration",
+      "Experience integrating and working with LLM APIs",
+      "Designing and maintaining scalable backend services",
+      "RESTful API design and best practices"
+    ],
+    "salary_range": "USD 150,000 - 180,000"
+  },
+  "scored_resumes": [
+    {
+      "name": "Alice Chen",
+      "score": 0.92,
+      "strengths": [
+        "7 years of professional Python development experience",
+        "4 years of hands-on FastAPI development",
+        "Expert-level asynchronous programming with asyncio",
+        "Experience building and operating scalable systems (1M events/day pipeline)",
+        "Strong PostgreSQL and Redis usage in production environments",
+        "Kubernetes orchestration experience",
+        "Direct integration with LLM APIs (OpenAI GPT-4)",
+        "Solid computer science foundation (BS CS, UC Berkeley)"
+      ],
+      "gaps": [
+        "Docker containerization experience not explicitly mentioned",
+        "PostgreSQL performance tuning and optimization not explicitly detailed",
+        "RESTful API design best practices not explicitly called out"
+      ],
+      "hire": true
+    },
+    {
+      "name": "Priya Sharma",
+      "score": 0.92,
+      "strengths": [
+        "6 years of professional Python development exceeding the 5+ year requirement",
+        "Strong hands-on experience with FastAPI and asynchronous programming since 2021",
+        "Proven use of PostgreSQL including production data workflows",
+        "Experience with Redis and Kafka for messaging and caching patterns",
+        "Kubernetes experience on GKE along with containerized deployments",
+        "Direct experience integrating LLM APIs (Anthropic Claude)",
+        "Background in building scalable backend and ML services with monitoring (Prometheus, MLflow)",
+        "Strong academic foundation with an MS in Computer Science from IIT Bombay"
+      ],
+      "gaps": [
+        "Docker containerization experience is implied but not explicitly stated",
+        "RESTful API design best practices are assumed through FastAPI usage but not clearly articulated",
+        "Limited explicit detail on database performance tuning and optimization depth"
+      ],
+      "hire": true
+    },
+    {
+      "name": "James Wilson",
+      "score": 0.25,
+      "strengths": [
+        "8 years of professional backend and cloud development experience",
+        "Professional Python development experience",
+        "Strong general backend engineering background",
+        "Experience designing and operating scalable cloud services on AWS",
+        "Familiarity with RESTful APIs and distributed systems",
+        "Additional proficiency in Go, indicating strong systems programming skills"
+      ],
+      "gaps": [
+        "No demonstrated experience with FastAPI",
+        "No experience with asynchronous programming using asyncio",
+        "No PostgreSQL database design or optimization experience",
+        "No Redis experience for caching or messaging",
+        "No Docker containerization experience mentioned",
+        "No Kubernetes (k8s) orchestration experience",
+        "No experience integrating or working with LLM APIs",
+        "Background focused on AWS Lambda and DynamoDB rather than required stack"
+      ],
+      "hire": false
+    },
+    {
+      "name": "Bob Martinez",
+      "score": 0.15,
+      "strengths": [
+        "Professional Python experience",
+        "Backend development exposure",
+        "RESTful API development with Django REST Framework"
+      ],
+      "gaps": [
+        "Less than 5 years of professional Python experience",
+        "No experience with FastAPI",
+        "No asynchronous programming with asyncio",
+        "No PostgreSQL experience (MySQL only)",
+        "No Redis usage for caching or messaging",
+        "No Docker containerization experience",
+        "No Kubernetes (k8s) orchestration experience",
+        "No experience integrating or working with LLM APIs",
+        "Limited evidence of designing and maintaining scalable backend services"
+      ],
+      "hire": false
+    }
+  ],
+  "shortlist": [
+    "Alice Chen",
+    "Priya Sharma"
+  ],
+  "enhancements": {
+    "Alice Chen": [
+      "1. Add a dedicated **\u201cInfrastructure & Deployment\u201d** bullet under recent roles explicitly mentioning Docker (e.g., \u201cBuilt and deployed Python services using Docker, authoring multi-stage Dockerfiles and managing containerized local and CI environments\u201d).",
+      "2. Expand database-related bullets to explicitly reference **PostgreSQL performance tuning**, including concrete techniques (e.g., \u201cOptimized PostgreSQL queries via indexing strategies, query plan analysis (EXPLAIN), and connection pooling\u201d).",
+      "3. Introduce a **\u201cBackend Architecture & APIs\u201d** subsection that explicitly calls out RESTful API best practices (e.g., \u201cDesigned RESTful APIs following resource-oriented design, proper HTTP methods/status codes, versioning, and OpenAPI documentation\u201d).",
+      "4. Add one quantified **project or achievement bullet** tying these skills together (e.g., \u201cContainerized a Python REST API backed by PostgreSQL, improving deployment consistency and reducing p95 latency by X% through query optimization\u201d)."
+    ],
+    "Priya Sharma": [
+      "1. Add a dedicated **Docker & Containerization** bullet under recent roles (e.g., \u201cBuilt and optimized multi-stage Docker images, managed containerized FastAPI services, and integrated Docker workflows into CI/CD pipelines\u201d) to explicitly demonstrate hands-on Docker expertise.",
+      "2. Expand FastAPI experience to clearly state **RESTful API design best practices**, such as versioning, idempotency, authentication/authorization patterns, OpenAPI documentation, error handling standards, and HTTP status code conventions.",
+      "3. Include a concrete subsection or bullet on **database performance tuning**, specifying techniques used (e.g., query optimization, indexing strategies, EXPLAIN/ANALYZE usage, connection pooling, ORM performance tuning with SQLAlchemy).",
+      "4. Quantify backend impact with **measurable outcomes** tied to scalability and performance (e.g., \u201cReduced API latency by 35% through query optimization and caching\u201d or \u201cImproved throughput by 2\u00d7 after database and API performance tuning\u201d)."
+    ]
+  },
+  "quiz": [
+    "1. **Q1 (Easy): RESTful API Design with FastAPI**",
+    "2. **Q2 (Medium): Asynchronous Programming and Performance**",
+    "3. **Q3 (Medium): PostgreSQL and Redis in Scalable Systems**",
+    "4. **Q4 (Hard): Containerization and Kubernetes Orchestration**",
+    "5. **Q5 (Hard): Designing Scalable Services with LLM Integration**"
+  ],
+  "follow_up": {
+    "Alice Chen": [
+      "1. **Async at scale:** You\u2019ve worked extensively with `asyncio` and operated a pipeline handling ~1M events/day. Can you walk me through a time when asynchronous design choices significantly impacted system reliability or performance? What trade-offs did you make, and what would you do differently today?",
+      "2. **FastAPI and API design:** Drawing on your FastAPI experience, tell me about a backend service you designed end-to-end. How did you think about RESTful API design (e.g., versioning, error handling, contracts with frontend/clients), and how did you ensure the API remained maintainable as requirements evolved?",
+      "3. **Databases under pressure:** You\u2019ve used PostgreSQL and Redis in production systems. Describe a situation where database performance became a bottleneck. How did you diagnose the issue, what optimizations did you apply (or wish you had applied), and what did you learn about designing for scale?",
+      "4. **Operating in containerized environments:** Although your background emphasizes Kubernetes, Docker isn\u2019t explicitly highlighted. Can you share an example of how you\u2019ve worked with containerized services in practice\u2014building, debugging, or deploying them\u2014and how that experience influenced your approach to reliability and developer productivity?"
+    ],
+    "Priya Sharma": [
+      "1. **You\u2019ve been working with FastAPI and async Python since 2021.** Can you walk me through a backend service you built where asynchronous design made a measurable difference? What trade-offs or challenges did you face, and how did you ensure reliability under load?",
+      "2. **You\u2019ve used PostgreSQL in production workflows.** Tell me about a time when database performance became a bottleneck. How did you identify the issue, what tuning or design changes did you make, and what was the outcome?",
+      "3. **Your experience shows Kubernetes on GKE and containerized deployments, though Docker isn\u2019t explicitly highlighted.** Can you describe your end-to-end process for taking a Python service from local development to running in Kubernetes? What responsibilities did you personally own in that pipeline?",
+      "4. **You\u2019ve integrated LLM APIs like Anthropic Claude into backend systems.** Describe a situation where you had to balance scalability, cost, and reliability when exposing an LLM-powered feature via an API. How did you design the API and monitor its behavior in production?"
+    ]
+  }
+}

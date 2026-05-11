@@ -43,9 +43,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# ── AutoGen ──────────────────────────────────────────────────────────────────
-import autogen
-from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+# ── AutoGen (autogen-agentchat 0.7+) ────────────────────────────────────────
+try:
+    # New package layout (autogen-agentchat >= 0.4)
+    from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+    from autogen_agentchat.teams import RoundRobinGroupChat as GroupChat
+    _AUTOGEN_NEW = True
+except ImportError:
+    # Legacy pyautogen < 0.4
+    import autogen
+    from autogen import AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
+    _AUTOGEN_NEW = False
 
 # ── HarnessAgent ─────────────────────────────────────────────────────────────
 import harness
