@@ -284,3 +284,96 @@ class PatchGenerator:
         except Exception as exc:
             logger.error("Patch generation failed for agent_type=%s: %s", agent_type, exc)
             return None
+
+    async def generate_tool_patch(
+        self,
+        agent_type: str,
+        errors: list[ErrorRecord],
+        tool_registry: Any | None = None,
+    ) -> Optional[Patch]:
+        """
+        Generate a tool description / schema patch from tool-related errors.
+
+        Analyses TOOL_NOT_FOUND, TOOL_SCHEMA_ERROR, and TOOL_EXEC_ERROR failures
+        and proposes updated tool descriptions or argument schema fixes.
+
+        Args:
+            agent_type:    The agent type whose tools to patch.
+            errors:        Recent tool-related ErrorRecord objects.
+            tool_registry: Optional ToolRegistry to read current tool definitions.
+
+        Returns:
+            A Patch with target="tool_config" if generation succeeded, else None.
+        """
+        tool_errors = [
+            e for e in errors
+            if any(fc in e.failure_class for fc in ("TOOL_", "MCP_"))
+        ]
+        if not tool_errors:
+            return None
+
+        # Build current tool definitions summary
+        tools_summary = ""
+        if tool_registry is not None:
+            try:
+                tools = tool_registry.list_tools()
+                tools_summary = "\n".join(
+                    f"- {t.name}: {t.description} | schema: {json.dumps(t.input_schema)[:200]}"
+                    for t in tools[:10]
+                )
+            except Exception:
+                pass
+
+        sample = tool_errors[:8]
+        error_lines = "\n".join(
+            f"{i}. [{e.failure_class}] {e.error_message[:200]}"
+            + (f"\n   Task: {e.task[:80]}" if e.task else "")
+            for i, e in enumerate(sample, 1)
+        )
+
+        prompt = (
+            f"Agent type: {agent_type}\n\n"
+            f"Current tools:\n{tools_summary or 'Unknown'}\n\n"
+            f"Recent tool failures ({len(tool_errors)} total):\n{error_lines}\n\n"
+            "Propose a tool configuration fix as JSON:\n"
+            '{"tool_name": str, "op": "update_description"|"update_schema"|"add_example", '
+            '"value": str_or_dict, "rationale": str}'
+        )
+
+        try:
+            response = await self._llm.complete(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=512,
+                system=(
+                    "You are an agent tool configuration expert. "
+                    "Analyse tool failures and propose precise tool definition fixes. "
+                    "Return only valid JSON."
+                ),
+            )
+            raw = response.content.strip()
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.MULTILINE)
+                raw = re.sub(r"\n?```$", "", raw, flags=re.MULTILINE)
+                raw = raw.strip()
+
+            data = json.loads(raw)
+            patch = Patch(
+                agent_type=agent_type,
+                target="tool_config",
+                op=str(data.get("op", "update_description")).lower(),
+                path=str(data.get("tool_name", "")),
+                value=json.dumps(data.get("value", "")),
+                rationale=str(data.get("rationale", "")),
+                proposed_by="hermes",
+                based_on_errors=[e.record_id for e in sample],
+            )
+            if self._patch_store is not None:
+                await self._patch_store.save(patch)
+            logger.info(
+                "Generated tool patch %s for agent_type=%s tool=%s",
+                patch.patch_id[:8], agent_type, patch.path,
+            )
+            return patch
+        except Exception as exc:
+            logger.warning("Tool patch generation failed: %s", exc)
+            return None

@@ -25,12 +25,17 @@ from harness.core.errors import FailureClass, LLMError
 
 logger = logging.getLogger(__name__)
 
-# Models in the o1/o3/o4 reasoning series with different API constraints
+# Models that require max_completion_tokens instead of max_tokens.
+# Includes o1/o3/o4 reasoning series and gpt-5 family (including Azure variants).
 _REASONING_MODELS = frozenset({
     "o1", "o1-mini", "o1-preview",
     "o3", "o3-mini",
     "o4-mini",
+    "gpt-5", "gpt-5-mini",
 })
+
+# Prefix patterns for reasoning/completion-token models not listed above
+_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5")
 
 # Models that support prompt caching (auto, no extra config needed)
 _CACHED_MODELS = frozenset({
@@ -67,7 +72,12 @@ class OpenAIProvider:
             organization=organization,
             **({"base_url": base_url} if base_url else {}),
         )
-        self._is_reasoning = any(model.startswith(r) for r in _REASONING_MODELS)
+        # A model is a "reasoning" model if it is in the known set, matches a
+        # known prefix, or the caller explicitly flags it with use_completion_tokens.
+        self._is_reasoning = (
+            model in _REASONING_MODELS
+            or any(model.startswith(p) for p in _REASONING_PREFIXES)
+        )
 
     # ------------------------------------------------------------------
     # LLMProvider protocol

@@ -25,6 +25,7 @@ from harness.memory.schemas import (
     MemoryEntry,
     RetrievalResult,
 )
+from harness.memory.session_memory import SessionMemory, SessionMemoryRegistry
 from harness.memory.short_term import ShortTermMemory
 from harness.memory.vector_factory import build_embedding_provider, build_vector_store
 
@@ -68,6 +69,7 @@ class MemoryManager:
         embedder: EmbeddingProvider,
         context_manager: ContextWindowManager,
         context_engine: ContextEngine | None = None,
+        session_registry: SessionMemoryRegistry | None = None,
     ) -> None:
         self._short_term = short_term
         self._vector_store = vector_store
@@ -76,6 +78,7 @@ class MemoryManager:
         self._context_manager = context_manager
         self._context_engine = context_engine
         self._graph_rag = GraphRAGEngine(graph, vector_store, embedder)
+        self._sessions = session_registry
 
     # ------------------------------------------------------------------
     # Conversation (short-term + context engine)
@@ -315,6 +318,29 @@ class MemoryManager:
             )
 
     # ------------------------------------------------------------------
+    # Session memory (cross-run, persistent)
+    # ------------------------------------------------------------------
+
+    def session(self, tenant_id: str, session_id: str = "default") -> SessionMemory:
+        """Return the SessionMemory for (tenant_id, session_id).
+
+        SessionMemory persists across runs — use it to store user preferences,
+        accumulated decisions, and cross-session facts.
+
+        Example
+        -------
+        sm = memory.session("acme", "user-42")
+        await sm.remember("preferred_model", "claude-sonnet")
+        model = await sm.recall("preferred_model")
+        """
+        if self._sessions is None:
+            raise RuntimeError(
+                "SessionMemoryRegistry not configured. "
+                "Pass a redis client to MemoryManager.create() to enable session memory."
+            )
+        return self._sessions.get(tenant_id, session_id)
+
+    # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
@@ -356,6 +382,16 @@ class MemoryManager:
             cold_pages_per_query=getattr(config, "context_cold_pages", 3),
         )
 
+        # Session memory registry — shared Redis client, 7-day TTL
+        import redis.asyncio as _aioredis
+        _redis_for_sessions = _aioredis.from_url(
+            config.redis_url, decode_responses=True, max_connections=5
+        )
+        session_registry = SessionMemoryRegistry(
+            redis=_redis_for_sessions,
+            default_ttl=getattr(config, "session_memory_ttl", 604_800),
+        )
+
         return cls(
             short_term=short_term,
             vector_store=vector_store,
@@ -363,4 +399,5 @@ class MemoryManager:
             embedder=embedder,
             context_manager=context_manager,
             context_engine=context_engine,
+            session_registry=session_registry,
         )

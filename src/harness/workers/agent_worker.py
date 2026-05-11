@@ -52,7 +52,7 @@ async def process_run_job_async(run_id: str, config_dict: dict | None = None) ->
         logger.error("Worker: Redis connection failed: %s", exc)
         raise
 
-    def _build_agent(agent_type: str) -> Any:
+    def _build_agent(agent_type: str, redis_client: Any = None) -> Any:
         """Create a production BaseAgent subclass with shared harness services."""
         from harness.core.cost_tracker import CostTracker
         from harness.llm.factory import build_router
@@ -113,9 +113,15 @@ async def process_run_job_async(run_id: str, config_dict: dict | None = None) ->
             from harness.agents.code_agent import CodeAgent
 
             return CodeAgent(**common_kwargs)
+        # Plugin registry — third-party agents registered at startup
+        if agent_type in _AGENT_REGISTRY:
+            cls = _AGENT_REGISTRY[agent_type]
+            return cls(**common_kwargs)
+
         raise ValueError(
-            f"Agent type {agent_type!r} is accepted by the API but has no worker factory. "
-            "Register a native agent or framework adapter before enqueueing this type."
+            f"Unknown agent_type {agent_type!r}. "
+            f"Supported: 'sql', 'code', or register a custom agent with "
+            f"harness.workers.agent_worker.register_agent('{agent_type}', MyAgent)."
         )
 
     # Build an agent factory
@@ -246,6 +252,55 @@ def start_worker(
 
     worker = Worker(queue_objects, connection=conn)
     worker.work(with_scheduler=True)
+
+
+# ---------------------------------------------------------------------------
+# Plugin registry — third-party agent types
+# ---------------------------------------------------------------------------
+
+_AGENT_REGISTRY: dict[str, type] = {}
+
+
+def register_agent(agent_type: str, agent_class: type) -> None:
+    """Register a custom agent class for a given agent_type string.
+
+    Example
+    -------
+    from harness.workers.agent_worker import register_agent
+    from mypackage import ResearchAgent
+
+    register_agent("research", ResearchAgent)
+    # Now POST /runs with agent_type="research" will use ResearchAgent
+    """
+    _AGENT_REGISTRY[agent_type] = agent_class
+    logger.info("Registered custom agent: %s → %s", agent_type, agent_class.__name__)
+
+
+def build_agent_factory(cfg: Any) -> Any:
+    """Return a callable agent factory using the default harness config.
+
+    Used by the API server at startup so it can execute runs directly
+    without delegating to the RQ worker (useful in dev / single-process mode).
+
+    Returns
+    -------
+    callable
+        A function (agent_type: str) -> BaseAgent subclass instance.
+    """
+    import redis.asyncio as aioredis
+
+    # Shared sync Redis client for the factory (used only for event sink + cost)
+    _redis = aioredis.from_url(
+        cfg.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=5,
+    )
+
+    def _factory(agent_type: str) -> Any:
+        return _build_agent(agent_type, redis_client=_redis)
+
+    return _factory
 
 
 class _NoopMemory:

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.api.deps import get_current_tenant, get_redis
+from harness.api.deps import get_agent_factory, get_current_tenant, get_redis
 from harness.core.config import get_config
 from harness.orchestrator.runner import AgentRunner, RunRecord
 
@@ -81,21 +81,27 @@ _ALLOWED_AGENT_TYPES = {
 }
 
 
-def _get_runner(redis: Any) -> AgentRunner:
-    """Build a minimal AgentRunner from the Redis client.
+def _get_runner(redis: Any, agent_factory: Any = None) -> AgentRunner:
+    """Build an AgentRunner for this request.
 
-    In production this would be injected from app.state.  For now it is
-    reconstructed per-request using the Redis connection.
+    Uses the real agent factory from ``app.state.agent_factory`` when
+    available (set at startup in ``lifespan()``), so the API can execute
+    runs directly without delegating to the RQ worker.
+
+    Falls back to an informative error factory in environments where the
+    full agent stack is not wired (e.g. read-only API replicas).
     """
-    # Lazy import to avoid circular deps
     from harness.orchestrator.runner import AgentRunner
 
-    def _noop_factory(agent_type: str):
-        raise NotImplementedError(
-            f"Agent factory not configured for type: {agent_type}"
+    def _stub_factory(agent_type: str):
+        raise RuntimeError(
+            f"Agent factory not available for type '{agent_type}'. "
+            "Ensure the API was started with the full harness stack, "
+            "or submit the run to the RQ worker queue."
         )
 
-    return AgentRunner(redis=redis, agent_factory=_noop_factory)
+    factory = agent_factory or _stub_factory
+    return AgentRunner(redis=redis, agent_factory=factory)
 
 
 def _enqueue_run(run_id: str, agent_type: str) -> str:
@@ -122,6 +128,7 @@ async def create_run(
     body: CreateRunRequest,
     tenant_id: str = Depends(get_current_tenant),
     redis: Any = Depends(get_redis),
+    agent_factory: Any = Depends(get_agent_factory),
 ) -> RunRecordResponse:
     """Create a new agent run and enqueue it for a worker.
 
@@ -142,7 +149,7 @@ async def create_run(
             detail=f"Unknown agent_type '{body.agent_type}'. Allowed: {sorted(_ALLOWED_AGENT_TYPES)}",
         )
 
-    runner = _get_runner(redis)
+    runner = _get_runner(redis, agent_factory)
     record = await runner.create_run(
         tenant_id=tenant_id,
         agent_type=body.agent_type,

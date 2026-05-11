@@ -60,9 +60,24 @@ class AgentMessageBus:
         """
         Publish a message to the appropriate Redis stream.
 
+        Automatically injects the current W3C traceparent from the active
+        OpenTelemetry span (if available) so the receiving agent can
+        continue the distributed trace without a chain break.
+
         Returns the stream entry ID assigned by Redis.
         Also registers the message in the TTL index.
         """
+        # Inject W3C traceparent for distributed trace propagation
+        if msg.traceparent is None:
+            try:
+                from opentelemetry.propagate import inject as _otel_inject  # type: ignore
+                carrier: dict[str, str] = {}
+                _otel_inject(carrier)
+                if "traceparent" in carrier:
+                    msg.traceparent = carrier["traceparent"]
+            except Exception:
+                pass  # OTel not installed or no active span — skip silently
+
         client = await self._get_client()
         stream_key = (
             _BROADCAST_STREAM

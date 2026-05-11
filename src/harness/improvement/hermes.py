@@ -169,14 +169,34 @@ class HermesLoop:
         except Exception as exc:
             logger.warning("Hermes: could not load current config for %s: %s", agent_type, exc)
 
-        # 4. Generate patch proposal
+        # 4. Generate patch proposal — prompt patch OR tool patch based on error types
         patch: Patch | None = None
         try:
-            patch = await self._generator.generate(
-                agent_type=agent_type,
-                errors=errors,
-                max_errors_in_prompt=10,
+            # Check if failures are tool-related (TOOL_* or MCP_*)
+            tool_failure_count = sum(
+                1 for e in errors
+                if any(fc in e.failure_class for fc in ("TOOL_", "MCP_"))
             )
+            prompt_failure_count = len(errors) - tool_failure_count
+
+            if tool_failure_count > prompt_failure_count and hasattr(self._generator, "generate_tool_patch"):
+                # Majority of failures are tool-related — generate a tool config patch
+                logger.info(
+                    "Hermes: %d/%d failures are tool-related — generating tool patch",
+                    tool_failure_count, len(errors),
+                )
+                patch = await self._generator.generate_tool_patch(
+                    agent_type=agent_type,
+                    errors=errors,
+                )
+
+            if patch is None:
+                # Fall back to (or prefer) prompt patch
+                patch = await self._generator.generate(
+                    agent_type=agent_type,
+                    errors=errors,
+                    max_errors_in_prompt=10,
+                )
         except Exception as exc:
             logger.error("Hermes: patch generation failed for %s: %s", agent_type, exc)
 

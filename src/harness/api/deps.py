@@ -30,6 +30,11 @@ def _hash_api_key(raw_key: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def get_agent_factory(request: Request) -> Any:
+    """Return the real agent factory from app.state (None in read-only mode)."""
+    return getattr(request.app.state, "agent_factory", None)
+
+
 async def get_redis(request: Request) -> Any:
     """Return the Redis client stored in app state.
 

@@ -86,6 +86,15 @@ async def lifespan(app: FastAPI):
         logger.debug("Prometheus metrics init: %s", exc)
         app.state.metrics = {}
 
+    # Wire the real agent factory so POST /runs can execute agents directly
+    try:
+        from harness.workers.agent_worker import build_agent_factory
+        app.state.agent_factory = build_agent_factory(cfg)
+        logger.info("Agent factory initialised (%s)", cfg.environment)
+    except Exception as exc:
+        logger.warning("Agent factory unavailable — runs will execute via worker only: %s", exc)
+        app.state.agent_factory = None
+
     logger.info("HarnessAgent API started (env=%s)", cfg.environment)
     yield
 
