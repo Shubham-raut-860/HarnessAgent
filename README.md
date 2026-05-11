@@ -1,4 +1,4 @@
-# HarnessAgent
+# Agent Harness as a Service
 
 Production-grade agent harness for building, running, observing, and self-improving AI agents. Bring your own framework or use the native SQL and Code agents. Memory, safety, tracing, and failure recovery come included.
 
