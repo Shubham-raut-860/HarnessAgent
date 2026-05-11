@@ -32,25 +32,35 @@ class Scheduler:
         message_bus: Any | None = None,
         max_concurrent: int = 10,
         max_retries: int = 1,
+        memory_manager: Any | None = None,
+        child_context_budget: int = 8_000,
     ) -> None:
         """
         Args:
-            agent_runner:   An AgentRunner (or compatible) instance.
-                            Must expose create_run() and execute_run().
-            message_bus:    Optional AgentMessageBus for broadcasting plan events.
-            max_concurrent: Max subtasks running at the same time (back-pressure).
-            max_retries:    How many times to retry a failed subtask before giving up.
+            agent_runner:          AgentRunner exposing create_run() / execute_run().
+            message_bus:           Optional AgentMessageBus for plan events.
+            max_concurrent:        Max parallel subtasks (back-pressure semaphore).
+            max_retries:           Retry attempts per subtask on transient failure.
+            memory_manager:        Optional MemoryManager.  When provided the scheduler
+                                   slices parent context into each child's hot window
+                                   before execution and injects the child's result back
+                                   into the parent after completion.
+            child_context_budget:  Token budget given to each child agent from the
+                                   parent's context (default 8 000 tokens).
         """
         self._runner = agent_runner
         self._message_bus = message_bus
         self._max_concurrent = max_concurrent
         self._max_retries = max_retries
+        self._memory = memory_manager
+        self._child_budget = child_context_budget
 
     async def execute_plan(
         self,
         plan: TaskPlan,
         tenant_id: str,
         timeout: float = 300.0,
+        parent_run_id: str | None = None,
     ) -> dict[str, AgentResult]:
         """Execute a TaskPlan and return results keyed by SubTask.id.
 
@@ -149,7 +159,7 @@ class Scheduler:
                     batch_results = await asyncio.gather(
                         *[
                             self._execute_subtask_with_retry(
-                                st, tenant_id, results, semaphore
+                                st, tenant_id, results, semaphore, parent_run_id
                             )
                             for st in ready
                         ],
@@ -222,6 +232,7 @@ class Scheduler:
         tenant_id: str,
         predecessor_results: dict[str, Any],
         semaphore: asyncio.Semaphore,
+        parent_run_id: str | None = None,
     ) -> Any:
         """Execute a subtask with back-pressure and retry on failure."""
         last_exc: Exception | None = None
@@ -229,7 +240,7 @@ class Scheduler:
             async with semaphore:
                 try:
                     result = await self._execute_subtask(
-                        subtask, tenant_id, predecessor_results
+                        subtask, tenant_id, predecessor_results, parent_run_id
                     )
                     if getattr(result, "success", True):
                         return result
@@ -268,13 +279,21 @@ class Scheduler:
         subtask: SubTask,
         tenant_id: str,
         predecessor_results: dict[str, Any],
+        parent_run_id: str | None = None,
     ) -> Any:
         """Execute a single SubTask, enriching its context with predecessor outputs.
 
+        When a ``memory_manager`` is configured and ``parent_run_id`` is
+        provided, the parent's relevant context is sliced into the child's
+        hot window before execution so the child agent does not start blind.
+        After execution the child's result is injected back into the parent's
+        context as a compressed tool message.
+
         Args:
-            subtask:            The sub-task to run.
-            tenant_id:          Owning tenant.
+            subtask:             The sub-task to run.
+            tenant_id:           Owning tenant.
             predecessor_results: Results from previously completed tasks.
+            parent_run_id:       Run ID of the orchestrating parent agent.
 
         Returns:
             AgentResult for this subtask.
@@ -305,7 +324,49 @@ class Scheduler:
                 task=task_with_context,
                 metadata=metadata,
             )
-            updated_record = await self._runner.execute_run(record.run_id)
+            child_run_id = record.run_id
+
+            # ── Slice parent context into child's hot window ─────────────
+            if self._memory is not None and parent_run_id:
+                try:
+                    await self._memory.slice_for_subagent(
+                        parent_run_id=parent_run_id,
+                        child_run_id=child_run_id,
+                        task=subtask.task,
+                        token_budget=self._child_budget,
+                        skill_ns=subtask.agent_type,
+                    )
+                    logger.debug(
+                        "Sliced parent context %s → child %s (budget=%d tokens)",
+                        parent_run_id[:8], child_run_id[:8], self._child_budget,
+                    )
+                except Exception as exc:
+                    logger.debug("Context slicing failed (continuing): %s", exc)
+
+            updated_record = await self._runner.execute_run(child_run_id)
+
+            # ── Inject child result back into parent context ──────────────
+            if self._memory is not None and parent_run_id:
+                try:
+                    result_data = updated_record.result or {}
+                    child_output = result_data.get("output", "")
+                    if child_output:
+                        summary = (
+                            f"SubTask '{subtask.id}' ({subtask.agent_type}): "
+                            + child_output[:800]
+                        )
+                        await self._memory.inject_subagent_result(
+                            parent_run_id=parent_run_id,
+                            child_run_id=child_run_id,
+                            result_summary=summary,
+                            skill_ns=subtask.agent_type,
+                        )
+                        logger.debug(
+                            "Injected child %s result into parent %s",
+                            child_run_id[:8], parent_run_id[:8],
+                        )
+                except Exception as exc:
+                    logger.debug("Result injection failed (non-fatal): %s", exc)
 
             # Extract AgentResult from the record
             result_data = updated_record.result or {}

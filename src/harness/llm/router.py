@@ -42,16 +42,22 @@ class LLMRouterConfig:
 
 
 class LLMRouter:
-    """Routes LLM completion requests across multiple providers with circuit breaking."""
+    """Routes LLM completion requests across multiple providers with circuit breaking.
+
+    Optional semantic caching: pass a ``SemanticLLMCache`` to avoid redundant
+    LLM calls for semantically similar queries (cosine similarity ≥ threshold).
+    """
 
     def __init__(
         self,
         config: LLMRouterConfig | None = None,
         registry: CircuitBreakerRegistry | None = None,
+        cache: Any | None = None,
     ) -> None:
         self._config = config or LLMRouterConfig()
         self._registry = registry or CircuitBreakerRegistry()
         self._breakers: dict[str, CircuitBreaker] = {}
+        self._cache = cache  # SemanticLLMCache | None
 
     def register(
         self,
@@ -88,9 +94,44 @@ class LLMRouter:
         required_context: int = 0,
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        skip_cache: bool = False,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Route a completion request, falling back on retryable errors."""
+        """Route a completion request, falling back on retryable errors.
+
+        Cache behaviour
+        ---------------
+        When a ``SemanticLLMCache`` is attached, the cache is checked before
+        routing.  A cache hit returns immediately with ``cached=True``.
+        After a successful provider call the response is stored in the cache.
+        Pass ``skip_cache=True`` to bypass for calls that must be fresh
+        (e.g. tool-use steps where exact output matters).
+        """
+        # ── Semantic cache lookup ───────────────────────────────────────
+        if self._cache is not None and not skip_cache and not tools:
+            try:
+                cached_text = await self._cache.get(messages)
+                if cached_text is not None:
+                    logger.debug("LLM cache hit — skipping provider call")
+                    try:
+                        from harness.observability.metrics import get_prometheus_metrics
+                        m = get_prometheus_metrics()
+                        if m and hasattr(m, "llm_cache_hits_total"):
+                            m.llm_cache_hits_total.labels(provider="cache").inc()
+                    except Exception:
+                        pass
+                    return LLMResponse(
+                        content=cached_text,
+                        tool_calls=[],
+                        input_tokens=0,
+                        output_tokens=0,
+                        model="cached",
+                        provider="cache",
+                        cached=True,
+                    )
+            except Exception as exc:
+                logger.debug("Cache lookup failed (continuing without cache): %s", exc)
+
         last_exc: Exception | None = None
 
         for entry in self._sorted_providers():
@@ -128,6 +169,13 @@ class LLMRouter:
                         tools=tools,
                         **kwargs,
                     )
+                    # ── Store in cache (only text responses, not tool calls) ─
+                    if (self._cache is not None and not skip_cache
+                            and not tools and response.content):
+                        try:
+                            await self._cache.set(messages, response.content)
+                        except Exception as exc:
+                            logger.debug("Cache store failed: %s", exc)
                     return response
             except CircuitOpenError as exc:
                 logger.warning("Circuit open for %s:%s, trying next",

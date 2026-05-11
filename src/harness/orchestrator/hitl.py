@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -314,6 +315,68 @@ class HITLManager:
             self._ttl * 2,  # keep longer than TTL for history
             req.to_json(),
         )
+
+    # ------------------------------------------------------------------
+    # Wait for decision  (called by BaseAgent._check_hitl)
+    # ------------------------------------------------------------------
+
+    async def await_decision(
+        self,
+        request_id: str,
+        timeout: float = _DEFAULT_TTL_SECONDS,
+        poll_interval: float = 2.0,
+    ) -> str:
+        """
+        Block until the approval request is resolved or expires.
+
+        Polls Redis every ``poll_interval`` seconds until the status
+        transitions away from "pending" or ``timeout`` elapses.
+
+        Returns
+        -------
+        str
+            "approved" | "rejected" | "expired"
+
+        Notes
+        -----
+        The caller (BaseAgent._check_hitl) raises HITLRejected when the
+        return value is "rejected" or "expired".
+        """
+        deadline = asyncio.get_event_loop().time() + timeout
+
+        while asyncio.get_event_loop().time() < deadline:
+            req = await self.get(request_id)
+
+            if req is None:
+                logger.warning("await_decision: request %s not found", request_id)
+                return "expired"
+
+            if req.status == "approved":
+                logger.info("HITL request %s approved", request_id)
+                return "approved"
+
+            if req.status in ("rejected", "expired"):
+                logger.info("HITL request %s %s", request_id, req.status)
+                return req.status
+
+            if req.is_expired:
+                req.status = "expired"
+                await self._persist(req)
+                logger.info("HITL request %s auto-expired", request_id)
+                return "expired"
+
+            # Still pending — wait and poll again
+            await asyncio.sleep(poll_interval)
+
+        # Timeout exhausted — mark as expired
+        req = await self.get(request_id)
+        if req is not None and req.status == "pending":
+            req.status = "expired"
+            await self._persist(req)
+            logger.warning(
+                "HITL request %s timed out after %.0fs", request_id, timeout
+            )
+        return "expired"
 
     async def _remove_from_pending(self, request_id: str) -> None:
         """No-op if not using a separate pending set."""
