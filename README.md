@@ -11,6 +11,10 @@ Production-grade agent harness for building, running, observing, and self-improv
 
 ---
 
+![HarnessAgent Architecture](assets/architecture.png)
+
+---
+
 ## What is this?
 
 Think about what actually happens when you run an AI agent in production. The LLM call needs to work. It needs to not cost $500 a day. It needs to not loop forever when the API is slow. It needs to remember context from three messages ago — and intelligently *discard* context that no longer matters. It needs to not crash your app when one provider goes down. And when it does fail, it needs to tell you *exactly why*.
