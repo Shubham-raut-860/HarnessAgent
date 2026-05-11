@@ -146,6 +146,39 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
+    /* ── Trace waterfall ─────────────────────────────────────────── */
+    .wf-header { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .wf-meta { display: flex; gap: 28px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .wf-meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .wf-meta-item span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .wf-meta-item strong { font-size: 16px; }
+    .wf-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .wf-table col.col-label { width: 270px; }
+    .wf-table col.col-ms { width: 68px; }
+    .wf-table col.col-tok { width: 58px; }
+    .wf-table col.col-bar { width: auto; }
+    .wf-th { padding: 7px 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; background: #fafbfc; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .wf-th.right { text-align: right; }
+    .wf-row { cursor: pointer; }
+    .wf-row:hover td { background: #f8fafc; }
+    .wf-label-cell { padding: 7px 12px; overflow: hidden; border-bottom: 1px solid var(--line); }
+    .wf-label-inner { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .wf-label-inner span.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    .wf-num-cell { padding: 7px 12px; text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; border-bottom: 1px solid var(--line); }
+    .wf-bar-cell { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); }
+    .wf-bar-track { position: relative; height: 20px; }
+    .wf-bar { position: absolute; top: 4px; height: 12px; border-radius: 3px; min-width: 3px; }
+    .wf-ruler-row td { padding: 0; background: #fafbfc; border-bottom: 1px solid var(--line); }
+    .wf-ruler { position: relative; height: 24px; }
+    .wf-ruler-mark { position: absolute; top: 6px; font-size: 10px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
+    .wf-ruler-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+    .wf-detail-row { display: none; }
+    .wf-detail-row.open { display: table-row; }
+    .wf-detail-body { padding: 10px 18px 14px 18px; background: #f8fafc; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .wf-detail-body pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-all; color: #475467; max-height: 100px; overflow: auto; background: white; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+    .wf-detail-meta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); margin-bottom: 4px; }
+    .kind-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 1px; }
+
     @media (max-width: 980px) {
       .shell { grid-template-columns: 1fr; }
       .sidebar { position: static; padding: 16px; }
@@ -178,7 +211,8 @@
         <button data-page="keys">Keys <span>4</span></button>
         <button data-page="guardrails">Guardrails <span>on</span></button>
         <button data-page="approvals">Approvals <span id="nav-hitl">0</span></button>
-        <button data-page="improvement">Hermes <span id="nav-patches">0</span></button>
+        <button data-page="traces">Traces <span id="nav-traces">↗</span></button>
+        <button data-page="improvement">Agent Optimizer <span id="nav-patches">0</span></button>
         <button data-page="review">Review <span>gaps</span></button>
         <button data-page="settings">Settings <span>api</span></button>
       </nav>
@@ -205,7 +239,7 @@
             <div class="stat"><span>API status</span><strong id="stat-health">-</strong><small id="stat-version">Waiting for /health</small></div>
             <div class="stat"><span>Month spend</span><strong>$48.22</strong><small>$100 tenant budget</small></div>
             <div class="stat"><span>Requests</span><strong id="stat-runs">0</strong><small id="stat-running">0 running or pending</small></div>
-            <div class="stat"><span>Interventions</span><strong id="stat-hitl">0</strong><small><span id="stat-patches">0</span> Hermes patches</small></div>
+            <div class="stat"><span>Interventions</span><strong id="stat-hitl">0</strong><small><span id="stat-patches">0</span> optimizer patches</small></div>
           </div>
           <div class="grid cols-2">
             <div class="panel">
@@ -318,7 +352,7 @@
                 <div class="check"><span class="dot good"></span><div><b>Handoffs are measured</b><p>Multi-agent suites now track predecessor context, guardrail hits, and tool errors per sub-agent.</p></div><span class="pill good">multi</span></div>
                 <div class="check"><span class="dot warn"></span><div><b>Code agent uses most tokens</b><p>Cap repository context, summarize history, and enable cached file summaries.</p></div><span class="pill warn">cost</span></div>
                 <div class="check"><span class="dot good"></span><div><b>Route simple tasks cheaply</b><p>Use task tags to route smoke, extraction, and formatting tasks to fast fallback models.</p></div><span class="pill good">router</span></div>
-                <div class="check"><span class="dot good"></span><div><b>Prompt patch gate</b><p>Hermes patches must beat baseline score and not increase token cost beyond threshold.</p></div><span class="pill good">prompt</span></div>
+                <div class="check"><span class="dot good"></span><div><b>Prompt patch gate</b><p>Optimizer patches must beat baseline score and not increase token cost beyond threshold.</p></div><span class="pill good">prompt</span></div>
               </div>
             </div>
           </div>
@@ -410,7 +444,7 @@
           <div class="grid cols-2">
             <div class="panel">
               <div class="panel-head">
-                <div><h2>Pending Patches</h2><p>Hermes prompt fixes waiting for review.</p></div>
+                <div><h2>Pending Patches</h2><p>Agent Optimizer prompt fixes waiting for review.</p></div>
                 <button class="btn small" id="reload-patches">Reload</button>
               </div>
               <div class="table-wrap"><table><thead><tr><th>Patch</th><th>Agent</th><th>Score</th><th>Rationale</th><th>Actions</th></tr></thead><tbody id="patch-table"></tbody></table></div>
@@ -420,6 +454,24 @@
                 <div><h2>Recent Failures</h2><p>Input signal for self-improvement cycles.</p></div>
               </div>
               <div class="table-wrap"><table><thead><tr><th>Agent</th><th>Failure</th><th>Error</th><th>Created</th></tr></thead><tbody id="errors-table"></tbody></table></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="page-traces">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Agent Trace</h2>
+                <p>Span waterfall: run → LLM → tool → guardrail → handoff. Spans persist 48 h.</p>
+              </div>
+              <div class="row" style="gap:8px">
+                <input id="trace-run-id" placeholder="Run ID" style="width:240px">
+                <button class="btn primary" id="load-trace-btn">Load trace</button>
+              </div>
+            </div>
+            <div id="trace-output">
+              <div class="empty" style="margin:20px">Enter a run ID above or click <b>Trace</b> next to any run.</div>
             </div>
           </div>
         </section>
@@ -470,6 +522,7 @@
       patches: [],
       errors: [],
       stream: null,
+      traceData: null,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -569,6 +622,7 @@
           <td>${escapeHtml(when(run.created_at))}</td>
           <td class="row">
             <button class="btn small" data-stream="${escapeHtml(run.run_id)}">Stream</button>
+            <button class="btn small" data-trace="${escapeHtml(run.run_id)}">Trace</button>
             ${compact ? "" : `<button class="btn small danger" data-cancel="${escapeHtml(run.run_id)}">Cancel</button>`}
           </td>
         </tr>
@@ -722,7 +776,7 @@
           renderHitl();
           renderPatches();
           renderStats();
-          toast("Redis is unavailable; run, HITL, and Hermes data are paused.");
+          toast("Redis is unavailable; run, HITL, and optimizer data are paused.");
           return;
         }
         await Promise.all([loadRuns(), loadHitl(), loadPatches()]);
@@ -850,6 +904,174 @@
       $("page-title").textContent = document.querySelector(`[data-page="${name}"]`).firstChild.textContent.trim();
     }
 
+    // ── Trace waterfall ─────────────────────────────────────────────────────
+
+    const KIND_COLOR = {
+      run:       "#1e40af",
+      agent:     "#2563eb",
+      llm:       "#7c3aed",
+      tool:      "#047857",
+      guardrail: "#b45309",
+      memory:    "#0369a1",
+      handoff:   "#9333ea",
+      eval:      "#1d4ed8",
+    };
+
+    function kindColor(kind, status) {
+      if (status === "error") return "#dc2626";
+      return KIND_COLOR[kind] || "#6b7280";
+    }
+
+    function fmtMs(ms) {
+      if (ms == null) return "–";
+      if (ms < 1) return "<1ms";
+      if (ms >= 1000) return (ms / 1000).toFixed(2) + "s";
+      return Math.round(ms) + "ms";
+    }
+
+    function fmtTok(n) {
+      if (!n) return "";
+      return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+    }
+
+    async function loadTrace(runId) {
+      if (!runId) { toast("Enter a run ID"); return; }
+      $("trace-output").innerHTML = '<div class="empty" style="margin:20px">Loading…</div>';
+      try {
+        const trace = await request("/runs/" + encodeURIComponent(runId.trim()) + "/trace");
+        state.traceData = trace;
+        renderWaterfall(trace);
+      } catch (err) {
+        $("trace-output").innerHTML =
+          `<div class="empty" style="margin:20px">No trace found: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderWaterfall(trace) {
+      const spans = (trace.spans || []);
+      if (!spans.length) {
+        $("trace-output").innerHTML = '<div class="empty" style="margin:20px">No spans recorded for this run.</div>';
+        return;
+      }
+
+      // ── timing baseline ──────────────────────────────────────────────────
+      const t0 = Math.min(...spans.map(s => new Date(s.start_time).getTime()));
+      const tEnd = Math.max(...spans.map(s =>
+        s.end_time ? new Date(s.end_time).getTime() : new Date(s.start_time).getTime() + 1
+      ));
+      const totalMs = Math.max(tEnd - t0, 1);
+
+      // ── hierarchy ────────────────────────────────────────────────────────
+      const childrenOf = {};
+      spans.forEach(s => {
+        const p = s.parent_span_id || "__root__";
+        (childrenOf[p] = childrenOf[p] || []).push(s);
+      });
+      const ordered = [];
+      function walk(pid, depth) {
+        const kids = (childrenOf[pid] || []).slice().sort(
+          (a, b) => new Date(a.start_time) - new Date(b.start_time)
+        );
+        kids.forEach(s => { ordered.push({ s, depth }); walk(s.span_id, depth + 1); });
+      }
+      walk("__root__", 0);
+
+      // ── ruler ────────────────────────────────────────────────────────────
+      const TICKS = 5;
+      const rulerHtml = Array.from({ length: TICKS + 1 }, (_, i) => {
+        const pct = (i / TICKS * 100).toFixed(1);
+        const label = fmtMs(i / TICKS * totalMs);
+        return `<div class="wf-ruler-tick" style="left:${pct}%"></div>
+                <span class="wf-ruler-mark" style="left:${pct}%">${escapeHtml(label)}</span>`;
+      }).join("");
+
+      // ── rows ─────────────────────────────────────────────────────────────
+      const rowsHtml = ordered.map(({ s, depth }) => {
+        const startMs = new Date(s.start_time).getTime() - t0;
+        const endMs   = s.end_time ? new Date(s.end_time).getTime() - t0 : totalMs;
+        const durMs   = s.duration_ms ?? (endMs - startMs);
+        const leftPct  = (startMs / totalMs * 100).toFixed(3);
+        const widthPct = Math.max(0.4, (endMs - startMs) / totalMs * 100).toFixed(3);
+        const color    = kindColor(s.kind, s.status);
+        const tokens   = (s.input_tokens || 0) + (s.output_tokens || 0);
+        const indent   = depth * 14;
+
+        return `
+          <tr class="wf-row" data-span-id="${escapeHtml(s.span_id)}">
+            <td class="wf-label-cell">
+              <div class="wf-label-inner" style="padding-left:${indent}px">
+                <span class="kind-dot" style="background:${color}"></span>
+                <span class="name" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>
+                ${s.status === "error" ? '<span class="pill bad" style="font-size:10px;padding:2px 5px;line-height:1.2">err</span>' : ""}
+                ${s.cached ? '<span class="pill info" style="font-size:10px;padding:2px 5px;line-height:1.2">$</span>' : ""}
+              </div>
+            </td>
+            <td class="wf-num-cell">${escapeHtml(fmtMs(durMs))}</td>
+            <td class="wf-num-cell">${escapeHtml(fmtTok(tokens))}</td>
+            <td class="wf-bar-cell">
+              <div class="wf-bar-track">
+                <div class="wf-bar"
+                     style="left:${leftPct}%;width:${widthPct}%;background:${color}"
+                     title="${escapeHtml(s.name + ": " + fmtMs(durMs))}"></div>
+              </div>
+            </td>
+          </tr>
+          <tr class="wf-detail-row" id="wf-detail-${escapeHtml(s.span_id)}">
+            <td colspan="4">
+              <div class="wf-detail-body">
+                <div class="wf-detail-meta">
+                  <span>span: <span class="mono">${escapeHtml(s.span_id)}</span></span>
+                  ${s.parent_span_id ? `<span>parent: <span class="mono">${escapeHtml(s.parent_span_id.slice(0,12))}</span></span>` : ""}
+                  <span>kind: ${escapeHtml(s.kind)}</span>
+                  <span>step: ${s.step ?? "–"}</span>
+                  ${tokens ? `<span>tokens: ${s.input_tokens || 0} in / ${s.output_tokens || 0} out</span>` : ""}
+                  ${s.cost_usd > 0 ? `<span>cost: $${s.cost_usd.toFixed(5)}</span>` : ""}
+                </div>
+                ${s.input_preview  ? `<div style="margin-top:6px"><b class="muted">Input</b><pre>${escapeHtml(s.input_preview)}</pre></div>` : ""}
+                ${s.output_preview ? `<div style="margin-top:4px"><b class="muted">Output</b><pre>${escapeHtml(s.output_preview)}</pre></div>` : ""}
+                ${s.error          ? `<div style="margin-top:4px;color:var(--bad)">⚠ ${escapeHtml(s.error)}</div>` : ""}
+              </div>
+            </td>
+          </tr>`;
+      }).join("");
+
+      // ── assemble ─────────────────────────────────────────────────────────
+      const totalTokens = (trace.total_input_tokens || 0) + (trace.total_output_tokens || 0);
+      $("trace-output").innerHTML = `
+        <div class="wf-header">
+          <div style="flex:1;min-width:0">
+            <b style="font-size:15px">${escapeHtml(trace.agent_type || "agent")}</b>
+            <span class="mono muted" style="margin-left:10px;font-size:12px">${escapeHtml(trace.run_id)}</span>
+          </div>
+          ${pill(trace.status)}
+        </div>
+        <div class="wf-meta">
+          <div class="wf-meta-item"><span>Duration</span><strong>${escapeHtml(fmtMs(trace.duration_ms))}</strong></div>
+          <div class="wf-meta-item"><span>Spans</span><strong>${trace.span_count || spans.length}</strong></div>
+          <div class="wf-meta-item"><span>Total tokens</span><strong>${escapeHtml(fmtTok(totalTokens) || "0")}</strong></div>
+          <div class="wf-meta-item"><span>In / Out</span><strong>${escapeHtml(fmtTok(trace.total_input_tokens))} / ${escapeHtml(fmtTok(trace.total_output_tokens))}</strong></div>
+          <div class="wf-meta-item"><span>Cost</span><strong>$${(trace.total_cost_usd || 0).toFixed(5)}</strong></div>
+        </div>
+        <div class="table-wrap">
+          <table class="wf-table">
+            <colgroup>
+              <col class="col-label"><col class="col-ms"><col class="col-tok"><col class="col-bar">
+            </colgroup>
+            <thead>
+              <tr class="wf-ruler-row">
+                <th class="wf-th">Span</th>
+                <th class="wf-th right">ms</th>
+                <th class="wf-th right">tok</th>
+                <th style="padding:0">
+                  <div class="wf-ruler">${rulerHtml}</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`;
+    }
+
     function saveSettings() {
       $("api-base").value = $("settings-api-base").value || window.location.origin || "http://localhost:8000";
       $("api-key").value = $("settings-api-key").value;
@@ -873,6 +1095,18 @@
       if (pageLink) showPage(pageLink.dataset.pageLink);
       const stream = event.target.closest("[data-stream]");
       if (stream) startStream(stream.dataset.stream);
+      const traceBtn = event.target.closest("[data-trace]");
+      if (traceBtn) {
+        $("trace-run-id").value = traceBtn.dataset.trace;
+        showPage("traces");
+        loadTrace(traceBtn.dataset.trace);
+      }
+      const wfRow = event.target.closest(".wf-row");
+      if (wfRow) {
+        const sid = wfRow.dataset.spanId;
+        const detail = document.getElementById("wf-detail-" + sid);
+        if (detail) detail.classList.toggle("open");
+      }
       const cancel = event.target.closest("[data-cancel]");
       if (cancel) cancelRun(cancel.dataset.cancel);
       const hitlApprove = event.target.closest("[data-hitl-approve]");
@@ -900,6 +1134,9 @@
       loadSettings();
       toast("Settings cleared.");
     });
+    $("load-trace-btn").addEventListener("click", () => loadTrace($("trace-run-id").value.trim()));
+    $("trace-run-id").addEventListener("keydown", (e) => { if (e.key === "Enter") loadTrace($("trace-run-id").value.trim()); });
+
     $("example-sql").addEventListener("click", () => {
       $("agent-type").value = "sql";
       $("task").value = "List available tables and summarize the likely business entities.";

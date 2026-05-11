@@ -8,7 +8,6 @@ import pytest
 
 from harness.agents.base import BaseAgent
 from harness.core.context import AgentResult, LLMResponse, ToolCall, ToolResult
-from harness.core.errors import FailureClass
 
 
 def _make_llm_response(content="Done", tool_calls=None, tokens=30):
@@ -31,7 +30,8 @@ def _mock_memory():
 
 
 def _make_agent(router=None, tool_registry=None, memory=None,
-                failure_tracker=None, cost_tracker=None, checkpoint_manager=None):
+                failure_tracker=None, cost_tracker=None, checkpoint_manager=None,
+                trace_recorder=None):
     router = router or AsyncMock()
     if not hasattr(router.complete, 'return_value') or router.complete.return_value is None:
         router.complete = AsyncMock(return_value=_make_llm_response())
@@ -42,8 +42,9 @@ def _make_agent(router=None, tool_registry=None, memory=None,
     failure_tracker = failure_tracker or AsyncMock()
     failure_tracker.record = AsyncMock()
 
-    cost_tracker = cost_tracker or AsyncMock()
-    cost_tracker.record = AsyncMock(return_value=MagicMock(cost_usd=0.001))
+    if cost_tracker is None:
+        cost_tracker = AsyncMock()
+        cost_tracker.record = AsyncMock(return_value=MagicMock(cost_usd=0.001))
 
     checkpoint_manager = checkpoint_manager or AsyncMock()
     checkpoint_manager.exists = AsyncMock(return_value=False)
@@ -63,6 +64,7 @@ def _make_agent(router=None, tool_registry=None, memory=None,
         cost_tracker=cost_tracker,
         checkpoint_manager=checkpoint_manager,
         message_bus=None,
+        trace_recorder=trace_recorder,
     )
 
 
@@ -206,3 +208,51 @@ async def test_cost_tracked_per_llm_call(agent_context):
     ctx = _make_ctx(agent_context)
     await agent.run(ctx)
     mock_cost.record.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_run_records_trace_spans(agent_context, redis_client, tmp_path):
+    from harness.observability.trace_recorder import TraceRecorder
+    from harness.observability.trace_schema import SpanKind
+
+    call = ToolCall(id="c1", name="echo", args={"message": "hi"})
+    responses = [
+        _make_llm_response("calling tool", tool_calls=[call], tokens=40),
+        _make_llm_response("done", tokens=20),
+    ]
+    router = AsyncMock()
+    router.complete = AsyncMock(side_effect=responses)
+
+    mock_registry = AsyncMock()
+    mock_registry.execute = AsyncMock(return_value=ToolResult(data={"echo": "hi"}))
+
+    mock_cost = AsyncMock()
+    mock_cost.record = AsyncMock(side_effect=[
+        MagicMock(cost_usd=0.004),
+        MagicMock(cost_usd=0.002),
+    ])
+
+    recorder = TraceRecorder(redis_url="redis://unused", log_dir=tmp_path)
+    recorder._client = redis_client
+
+    agent = _make_agent(
+        router=router,
+        tool_registry=mock_registry,
+        cost_tracker=mock_cost,
+        trace_recorder=recorder,
+    )
+    ctx = _make_ctx(agent_context)
+
+    result = await agent.run(ctx)
+    trace = await recorder.get_trace(ctx.run_id)
+
+    assert result.success is True
+    assert trace is not None
+    assert trace.total_input_tokens == 30
+    assert trace.total_output_tokens == 30
+    assert trace.total_cost_usd == pytest.approx(0.006)
+
+    kinds = [span.kind for span in trace.spans]
+    assert SpanKind.RUN in kinds
+    assert kinds.count(SpanKind.LLM) == 2
+    assert SpanKind.TOOL in kinds

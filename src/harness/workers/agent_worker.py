@@ -56,6 +56,7 @@ async def process_run_job_async(run_id: str, config_dict: dict | None = None) ->
         """Create a production BaseAgent subclass with shared harness services."""
         from harness.core.cost_tracker import CostTracker
         from harness.llm.factory import build_router
+        from harness.observability.trace_recorder import TraceRecorder
         from harness.safety.pipeline_factory import build_pipeline, get_default_config
         from harness.tools.code_tools import ApplyPatchTool, LintCodeTool, RunCodeTool
         from harness.tools.file_tools import ListWorkspaceTool, ReadFileTool, WriteFileTool
@@ -99,6 +100,9 @@ async def process_run_job_async(run_id: str, config_dict: dict | None = None) ->
             ),
             "checkpoint_manager": _NoopCheckpointManager(),
             "message_bus": None,
+            "trace_recorder": TraceRecorder.create(
+                redis_url=config_dict.get("redis_url", cfg.redis_url),
+            ),
         }
 
         if agent_type == "sql":

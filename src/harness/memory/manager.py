@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from harness.core.protocols import EmbeddingProvider, GraphPath, VectorStore
+from harness.memory.context_engine import (
+    ActionRecord,
+    ActionSummary,
+    BuiltContext,
+    ContextEngine,
+    SubAgentSlice,
+)
 from harness.memory.context_manager import ContextWindowManager
 from harness.memory.graph import get_graph_memory
 from harness.memory.graph_rag import GraphRAGEngine
@@ -60,16 +67,18 @@ class MemoryManager:
         graph: Any,
         embedder: EmbeddingProvider,
         context_manager: ContextWindowManager,
+        context_engine: ContextEngine | None = None,
     ) -> None:
         self._short_term = short_term
         self._vector_store = vector_store
         self._graph = graph
         self._embedder = embedder
         self._context_manager = context_manager
+        self._context_engine = context_engine
         self._graph_rag = GraphRAGEngine(graph, vector_store, embedder)
 
     # ------------------------------------------------------------------
-    # Conversation (short-term)
+    # Conversation (short-term + context engine)
     # ------------------------------------------------------------------
 
     async def push_message(
@@ -78,9 +87,15 @@ class MemoryManager:
         role: str,
         content: str,
         tokens: int = 0,
+        skill_ns: str = "default",
+        step: int = 0,
     ) -> None:
-        """Append a new message to the conversation history for ``run_id``."""
+        """Append a message; feeds both the legacy short-term store and ContextEngine."""
         await self._short_term.push_message(run_id, role, content, tokens)
+        if self._context_engine is not None:
+            await self._context_engine.push(
+                run_id, role, content, tokens=tokens, skill_ns=skill_ns, step=step
+            )
 
     async def get_history(
         self,
@@ -207,6 +222,99 @@ class MemoryManager:
         return await self._graph_rag.retrieve(query=query, ctx=ctx)
 
     # ------------------------------------------------------------------
+    # ContextEngine — paged, skill-isolated, action-scored
+    # ------------------------------------------------------------------
+
+    async def build_context(
+        self,
+        run_id: str,
+        query: str,
+        skill_ns: str = "default",
+        token_budget: int | None = None,
+    ) -> BuiltContext | ContextWindow:
+        """
+        Build an LLM-ready context window.
+
+        Uses ContextEngine (with offload + cold retrieval) when available;
+        falls back to legacy ContextWindowManager otherwise.
+        """
+        if self._context_engine is not None:
+            return await self._context_engine.build_context(
+                run_id=run_id,
+                query=query,
+                skill_ns=skill_ns,
+                token_budget=token_budget,
+            )
+        # Legacy path
+        return await self.fit_history(run_id, max_tokens=token_budget or 100_000)
+
+    async def evaluate_action(
+        self,
+        run_id: str,
+        step: int,
+        goal: str,
+        llm_content: str,
+        tool_name: str | None = None,
+        tool_result: str | None = None,
+        is_error: bool = False,
+        skill_ns: str = "default",
+    ) -> ActionRecord | None:
+        """Score an agent action and persist the record. No-op without ContextEngine."""
+        if self._context_engine is None:
+            return None
+        return await self._context_engine.evaluate_action(
+            run_id=run_id,
+            step=step,
+            goal=goal,
+            llm_content=llm_content,
+            tool_name=tool_name,
+            tool_result=tool_result,
+            is_error=is_error,
+            skill_ns=skill_ns,
+        )
+
+    async def get_action_summary(self, run_id: str) -> ActionSummary | None:
+        """Return aggregated action metrics. None if ContextEngine not configured."""
+        if self._context_engine is None:
+            return None
+        return await self._context_engine.get_action_summary(run_id)
+
+    async def slice_for_subagent(
+        self,
+        parent_run_id: str,
+        child_run_id: str,
+        task: str,
+        token_budget: int,
+        skill_ns: str = "default",
+    ) -> SubAgentSlice | None:
+        """Slice parent context for a child agent. None if ContextEngine not configured."""
+        if self._context_engine is None:
+            return None
+        return await self._context_engine.slice_for_subagent(
+            parent_run_id=parent_run_id,
+            child_run_id=child_run_id,
+            task=task,
+            token_budget=token_budget,
+            skill_ns=skill_ns,
+        )
+
+    async def inject_subagent_result(
+        self,
+        parent_run_id: str,
+        child_run_id: str,
+        result_summary: str,
+        skill_ns: str = "default",
+    ) -> None:
+        """Inject child result into parent hot window. No-op without ContextEngine."""
+        if self._context_engine is not None:
+            await self._context_engine.inject_subagent_result(
+                parent_run_id=parent_run_id,
+                child_run_id=child_run_id,
+                result_summary=result_summary,
+                skill_ns=skill_ns,
+            )
+
+    # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
@@ -219,7 +327,7 @@ class MemoryManager:
     # ------------------------------------------------------------------
 
     @classmethod
-    async def create(cls, config: Any) -> "MemoryManager":
+    async def create(cls, config: Any, llm_provider: Any = None) -> "MemoryManager":
         """
         Build a fully configured MemoryManager from harness config.
 
@@ -228,7 +336,8 @@ class MemoryManager:
         - EmbeddingProvider (SentenceTransformer)
         - VectorStore (Chroma / Qdrant / Weaviate based on config)
         - GraphMemory (NetworkX / Neo4j based on config)
-        - ContextWindowManager (100k token budget by default)
+        - ContextWindowManager (legacy 100k token budget)
+        - ContextEngine (paged, skill-isolated, action-scored)
         """
         embedder = build_embedding_provider(config)
         vector_store = build_vector_store(config, embedder)
@@ -236,10 +345,22 @@ class MemoryManager:
         graph = get_graph_memory(config)
         context_manager = ContextWindowManager(max_tokens=100_000)
 
+        context_engine = ContextEngine.create(
+            redis_url=config.redis_url,
+            vector_store=vector_store,
+            embedder=embedder,
+            summarizer=llm_provider,
+            max_hot_tokens=getattr(config, "context_max_hot_tokens", 80_000),
+            reserve_output=getattr(config, "context_reserve_output", 2_000),
+            offload_threshold=getattr(config, "context_offload_threshold", 0.80),
+            cold_pages_per_query=getattr(config, "context_cold_pages", 3),
+        )
+
         return cls(
             short_term=short_term,
             vector_store=vector_store,
             graph=graph,
             embedder=embedder,
             context_manager=context_manager,
+            context_engine=context_engine,
         )

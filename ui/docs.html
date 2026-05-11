@@ -1,0 +1,1633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HarnessAgent — Technical Documentation</title>
+  <link rel="canonical" href="https://thepradip.github.io/HarnessAgent-docs/">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #161b22;
+      --surface-2: #1c2333;
+      --surface-3: #21262d;
+      --border: #30363d;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --accent: #388bfd;
+      --accent-2: #3fb950;
+      --accent-3: #f78166;
+      --accent-4: #d2a8ff;
+      --accent-5: #79c0ff;
+      --warn: #cca700;
+      --tag-bg: #1f2937;
+      --tag-color: #93c5fd;
+      --code-bg: #161b22;
+      --radius: 6px;
+      --sidebar-w: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; }
+
+    /* ── Sidebar ───────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w); min-width: var(--sidebar-w); height: 100vh;
+      background: var(--surface); border-right: 1px solid var(--border);
+      position: sticky; top: 0; overflow-y: auto; display: flex; flex-direction: column;
+      padding: 0 0 40px;
+    }
+    .sidebar-header {
+      padding: 22px 20px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 2;
+    }
+    .sidebar-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .sidebar-logo .icon {
+      width: 32px; height: 32px; background: var(--accent); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; color: white; flex-shrink: 0;
+    }
+    .sidebar-logo strong { color: var(--ink); font-size: 15px; }
+    .sidebar-logo span { color: var(--muted); font-size: 11px; display: block; }
+    .sidebar-search {
+      margin: 12px 16px 0;
+      background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius);
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    }
+    .sidebar-search input {
+      background: none; border: none; outline: none; color: var(--ink); width: 100%; font-size: 13px;
+    }
+    .sidebar-search input::placeholder { color: var(--muted); }
+    .nav-group { padding: 16px 0 0; }
+    .nav-group-label {
+      padding: 0 20px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted);
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px; padding: 6px 20px;
+      color: var(--muted); text-decoration: none; font-size: 13px; cursor: pointer;
+      border-left: 2px solid transparent; transition: all .12s;
+    }
+    .nav-item:hover { color: var(--ink); background: rgba(255,255,255,.04); }
+    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(56,139,253,.08); }
+    .nav-item .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+    }
+    .nav-item .badge {
+      margin-left: auto; background: var(--surface-3); color: var(--muted);
+      font-size: 10px; padding: 1px 6px; border-radius: 999px; font-weight: 600;
+    }
+
+    /* ── Main ──────────────────────────────────────── */
+    #main { flex: 1; min-width: 0; overflow-y: auto; }
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 14px 40px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 3;
+    }
+    .topbar-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+    .topbar-breadcrumb strong { color: var(--ink); }
+    .topbar-actions { display: flex; gap: 8px; }
+    .topbar-btn {
+      background: var(--surface-3); border: 1px solid var(--border); color: var(--muted);
+      padding: 5px 12px; border-radius: var(--radius); font-size: 12px; cursor: pointer;
+      transition: all .12s;
+    }
+    .topbar-btn:hover { color: var(--ink); border-color: var(--accent); }
+    .content { padding: 40px; max-width: 1000px; }
+    .section { margin-bottom: 64px; }
+
+    /* ── Typography ────────────────────────────────── */
+    h1 { font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; margin-bottom: 12px; color: var(--ink); }
+    h2 { font-size: 22px; font-weight: 700; margin-top: 40px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 17px; font-weight: 700; margin-top: 28px; margin-bottom: 10px; color: var(--accent-5); }
+    h4 { font-size: 14px; font-weight: 700; margin-top: 18px; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    p { margin-bottom: 12px; color: var(--muted); }
+    p strong { color: var(--ink); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { padding-left: 22px; margin-bottom: 12px; }
+    li { margin-bottom: 4px; color: var(--muted); }
+    li strong, li code { color: var(--ink); }
+
+    /* ── Code ──────────────────────────────────────── */
+    code {
+      background: var(--surface-3); color: var(--accent-4); padding: 1px 5px;
+      border-radius: 4px; font-family: "SF Mono", "Fira Code", "Consolas", monospace; font-size: 13px;
+    }
+    pre {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 20px; overflow-x: auto; margin-bottom: 16px; position: relative;
+    }
+    pre code { background: none; color: var(--ink); padding: 0; font-size: 13px; line-height: 1.6; }
+    .code-lang {
+      position: absolute; top: 8px; right: 10px; font-size: 10px; color: var(--muted);
+      font-family: inherit; text-transform: uppercase; letter-spacing: .08em;
+    }
+
+    /* ── Cards & Tables ────────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; margin-bottom: 16px;
+    }
+    .card h3 { margin-top: 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .stat-card .num { font-size: 28px; font-weight: 700; color: var(--ink); line-height: 1; }
+    .stat-card .label { font-size: 12px; color: var(--muted); }
+    .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+    thead th {
+      text-align: left; padding: 8px 12px; background: var(--surface-3); color: var(--muted);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: top; }
+    tbody td:first-child code { color: var(--accent-5); }
+    tbody tr:hover td { background: rgba(255,255,255,.02); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    /* ── Tags / Pills ──────────────────────────────── */
+    .tag {
+      display: inline-flex; align-items: center; gap: 4px; background: var(--tag-bg);
+      color: var(--tag-color); font-size: 11px; font-weight: 600; padding: 2px 8px;
+      border-radius: 999px; border: 1px solid rgba(56,139,253,.2); margin: 0 3px 3px 0;
+    }
+    .tag.green { color: var(--accent-2); background: rgba(63,185,80,.12); border-color: rgba(63,185,80,.2); }
+    .tag.red { color: var(--accent-3); background: rgba(247,129,102,.12); border-color: rgba(247,129,102,.2); }
+    .tag.purple { color: var(--accent-4); background: rgba(210,168,255,.12); border-color: rgba(210,168,255,.2); }
+    .tag.yellow { color: var(--warn); background: rgba(204,167,0,.12); border-color: rgba(204,167,0,.2); }
+
+    /* ── Module Cards ──────────────────────────────── */
+    .module-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 20px; overflow: hidden;
+    }
+    .module-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex;
+      align-items: flex-start; gap: 14px;
+    }
+    .module-icon {
+      width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 16px; flex-shrink: 0; margin-top: 1px;
+    }
+    .module-header h3 { margin: 0 0 3px; font-size: 15px; color: var(--ink); }
+    .module-header p { margin: 0; font-size: 12px; color: var(--muted); }
+    .module-body { padding: 14px 18px; }
+    .method-list { display: grid; gap: 8px; }
+    .method {
+      background: var(--surface-3); border-radius: var(--radius); padding: 10px 14px;
+      border-left: 3px solid var(--accent);
+    }
+    .method.tool { border-left-color: var(--accent-2); }
+    .method.event { border-left-color: var(--accent-4); }
+    .method.warn { border-left-color: var(--warn); }
+    .method-sig { font-family: "SF Mono","Fira Code",monospace; font-size: 12px; color: var(--accent-5); margin-bottom: 3px; }
+    .method-desc { font-size: 12px; color: var(--muted); }
+
+    /* ── Architecture diagram ──────────────────────── */
+    .arch-box {
+      border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px;
+      background: var(--surface-2); margin-bottom: 8px; position: relative;
+    }
+    .arch-box .arch-label {
+      font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 8px;
+    }
+    .arch-box .arch-items { display: flex; gap: 8px; flex-wrap: wrap; }
+    .arch-chip {
+      background: var(--surface-3); border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 10px; font-size: 12px; color: var(--muted);
+    }
+    .arch-chip.blue { border-color: rgba(56,139,253,.4); color: var(--accent-5); background: rgba(56,139,253,.1); }
+    .arch-chip.green { border-color: rgba(63,185,80,.4); color: var(--accent-2); background: rgba(63,185,80,.1); }
+    .arch-chip.purple { border-color: rgba(210,168,255,.4); color: var(--accent-4); background: rgba(210,168,255,.1); }
+    .arch-chip.orange { border-color: rgba(204,167,0,.4); color: var(--warn); background: rgba(204,167,0,.1); }
+    .arch-chip.red { border-color: rgba(247,129,102,.4); color: var(--accent-3); background: rgba(247,129,102,.1); }
+    .arch-arrow { text-align: center; color: var(--border); font-size: 18px; margin: 2px 0; }
+
+    /* ── Callout ────────────────────────────────────── */
+    .callout {
+      border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+      margin-bottom: 16px; display: flex; gap: 12px;
+    }
+    .callout.info { border-left: 3px solid var(--accent); background: rgba(56,139,253,.05); }
+    .callout.warn { border-left: 3px solid var(--warn); background: rgba(204,167,0,.05); }
+    .callout.success { border-left: 3px solid var(--accent-2); background: rgba(63,185,80,.05); }
+    .callout .callout-icon { font-size: 16px; line-height: 1.6; flex-shrink: 0; }
+    .callout p { margin: 0; font-size: 13px; }
+
+    /* ── Span hierarchy vis ─────────────────────────── */
+    .span-tree { font-family: "SF Mono","Fira Code",monospace; font-size: 12px; line-height: 1.8; }
+    .span-row { display: flex; align-items: center; gap: 8px; }
+    .span-kind {
+      padding: 1px 8px; border-radius: 3px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+    }
+    .span-kind.run { background: rgba(56,139,253,.2); color: #388bfd; }
+    .span-kind.llm { background: rgba(210,168,255,.2); color: #d2a8ff; }
+    .span-kind.tool { background: rgba(63,185,80,.2); color: #3fb950; }
+    .span-kind.guardrail { background: rgba(204,167,0,.2); color: #cca700; }
+    .span-kind.memory { background: rgba(121,192,255,.2); color: #79c0ff; }
+    .span-kind.handoff { background: rgba(247,129,102,.2); color: #f78166; }
+    .span-kind.eval { background: rgba(148,103,189,.2); color: #9467bd; }
+
+    /* ── Scrollspy ──────────────────────────────────── */
+    .section[id] { scroll-margin-top: 80px; }
+
+    /* ── Responsive ─────────────────────────────────── */
+    @media (max-width: 900px) {
+      #sidebar { display: none; }
+      .content { padding: 24px 20px; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .topbar { padding: 12px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <a class="sidebar-logo" href="#overview">
+      <div class="icon">H</div>
+      <div>
+        <strong>HarnessAgent</strong>
+        <span>Technical Reference v0.1</span>
+      </div>
+    </a>
+    <div class="sidebar-search">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--muted);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Search…" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Getting Started</div>
+    <a class="nav-item active" href="#overview"><span class="dot"></span> Overview</a>
+    <a class="nav-item" href="#architecture"><span class="dot"></span> Architecture</a>
+    <a class="nav-item" href="#quickstart"><span class="dot"></span> Quick Start</a>
+    <a class="nav-item" href="#config"><span class="dot"></span> Configuration</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Core</div>
+    <a class="nav-item" href="#core-context"><span class="dot"></span> Context & Events</a>
+    <a class="nav-item" href="#core-protocols"><span class="dot"></span> Protocols</a>
+    <a class="nav-item" href="#core-errors"><span class="dot"></span> Error Hierarchy</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Agents</div>
+    <a class="nav-item" href="#agent-base"><span class="dot"></span> BaseAgent</a>
+    <a class="nav-item" href="#agent-code"><span class="dot"></span> CodeAgent</a>
+    <a class="nav-item" href="#agent-sql"><span class="dot"></span> SQLAgent</a>
+    <a class="nav-item" href="#adapters"><span class="dot"></span> Framework Adapters</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Memory</div>
+    <a class="nav-item" href="#memory-manager"><span class="dot"></span> MemoryManager</a>
+    <a class="nav-item" href="#context-engine"><span class="dot"></span> ContextEngine</a>
+    <a class="nav-item" href="#graph-rag"><span class="dot"></span> GraphRAG</a>
+    <a class="nav-item" href="#llm-cache"><span class="dot"></span> LLM Cache</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Observability</div>
+    <a class="nav-item" href="#tracing"><span class="dot"></span> Trace System</a>
+    <a class="nav-item" href="#trace-schema"><span class="dot"></span> TraceSpan Schema</a>
+    <a class="nav-item" href="#trace-recorder"><span class="dot"></span> TraceRecorder</a>
+    <a class="nav-item" href="#metrics"><span class="dot"></span> Metrics & Audit</a>
+    <a class="nav-item" href="#event-bus"><span class="dot"></span> Event Bus (SSE)</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Tools & Skills</div>
+    <a class="nav-item" href="#tool-registry"><span class="dot"></span> ToolRegistry</a>
+    <a class="nav-item" href="#mcp"><span class="dot"></span> MCP Client</a>
+    <a class="nav-item" href="#skills"><span class="dot"></span> Skills</a>
+    <a class="nav-item" href="#sandbox"><span class="dot"></span> Sandbox</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Orchestration</div>
+    <a class="nav-item" href="#runner"><span class="dot"></span> AgentRunner</a>
+    <a class="nav-item" href="#planner"><span class="dot"></span> Planner & Scheduler</a>
+    <a class="nav-item" href="#hitl"><span class="dot"></span> HITL</a>
+    <a class="nav-item" href="#messaging"><span class="dot"></span> Messaging Bus</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">LLM Layer</div>
+    <a class="nav-item" href="#llm-router"><span class="dot"></span> LLM Router</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Self-Improvement</div>
+    <a class="nav-item" href="#hermes"><span class="dot"></span> Hermes Loop</a>
+    <a class="nav-item" href="#eval"><span class="dot"></span> Eval Framework</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-group-label">Reference</div>
+    <a class="nav-item" href="#api-reference"><span class="dot"></span> REST API</a>
+    <a class="nav-item" href="#redis-schema"><span class="dot"></span> Redis Schema</a>
+    <a class="nav-item" href="#dependencies"><span class="dot"></span> Dependencies</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════════ -->
+<div id="main">
+  <div class="topbar">
+    <div class="topbar-breadcrumb">
+      <span>Docs</span><span style="color:var(--border)">›</span>
+      <strong id="current-section">Overview</strong>
+    </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" onclick="window.print()">Print</button>
+      <button class="topbar-btn" onclick="document.documentElement.requestFullscreen?.()">Fullscreen</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════════════════ OVERVIEW ══════════════════════ -->
+    <section class="section" id="overview">
+      <h1>HarnessAgent</h1>
+      <p>Production-grade, multi-tenant agent harness for building, running, observing, and self-improving AI agents. HarnessAgent wraps any agent framework (LangGraph, CrewAI, AutoGen) or can run native SQL/Code agents with a full production lifecycle: paged context management, semantic memory, tool safety, distributed tracing, and automated self-improvement.</p>
+
+      <div class="grid-3" style="margin-top:24px">
+        <div class="stat-card">
+          <div class="num">45+</div>
+          <div class="label">Python modules</div>
+          <div class="sub">Core, Memory, Observability, Tools, Orchestration</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">5</div>
+          <div class="label">Memory tiers</div>
+          <div class="sub">Hot window, pages, vector, graph, short-term</div>
+        </div>
+        <div class="stat-card">
+          <div class="num">8</div>
+          <div class="label">Span kinds</div>
+          <div class="sub">RUN, LLM, TOOL, GUARDRAIL, MEMORY, HANDOFF, EVAL, AGENT</div>
+        </div>
+      </div>
+
+      <h2>What it gives you</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--accent-5)">Run lifecycle</h3>
+          <p>Create → execute → checkpoint → resume → emit SSE events → stream to client. Every run is tracked in Redis with full state including HITL pauses and budget enforcement.</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--accent-2)">Context engineering</h3>
+          <p>Automatic page-based offloading, LLM/extractive compression, semantic cold-page retrieval, per-skill namespace isolation, action scoring, and sub-agent context bridging.</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--accent-4)">Full span tracing</h3>
+          <p>Every run produces a hierarchical span tree (RUN → LLM/TOOL/GUARDRAIL) stored in Redis + JSONL, queryable via <code>GET /runs/{id}/trace</code>.</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0;color:var(--warn)">Self-improvement</h3>
+          <p>Hermes loop: collect failures → LLM generates patch → eval on replay → auto-apply + regression rollback. Online monitor tracks per-version metrics.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ ARCHITECTURE ══════════════════════ -->
+    <section class="section" id="architecture">
+      <h2>Architecture</h2>
+      <p>HarnessAgent is structured as a layered service. External requests enter through the FastAPI layer and pass through the orchestration layer to individual agents, which interact with memory, tools, and observability systems.</p>
+
+      <div class="arch-box">
+        <div class="arch-label">Client / SDK</div>
+        <div class="arch-items">
+          <span class="arch-chip blue">REST API</span>
+          <span class="arch-chip blue">SSE Streaming</span>
+          <span class="arch-chip blue">Python SDK (wrap())</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch-box">
+        <div class="arch-label">FastAPI Server — api/</div>
+        <div class="arch-items">
+          <span class="arch-chip">/runs</span>
+          <span class="arch-chip">/runs/{id}/trace</span>
+          <span class="arch-chip">/evals</span>
+          <span class="arch-chip">/improvement</span>
+          <span class="arch-chip">/memory</span>
+          <span class="arch-chip">/health</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch-box">
+        <div class="arch-label">Orchestration — orchestrator/</div>
+        <div class="arch-items">
+          <span class="arch-chip blue">AgentRunner</span>
+          <span class="arch-chip blue">Planner (DAG)</span>
+          <span class="arch-chip blue">Scheduler (parallel)</span>
+          <span class="arch-chip blue">HITLManager</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch-box">
+        <div class="arch-label">Agent Layer — agents/</div>
+        <div class="arch-items">
+          <span class="arch-chip blue">BaseAgent (run loop)</span>
+          <span class="arch-chip green">CodeAgent</span>
+          <span class="arch-chip green">SQLAgent</span>
+          <span class="arch-chip purple">LangGraphAdapter</span>
+          <span class="arch-chip purple">CrewAIAdapter</span>
+          <span class="arch-chip purple">AutoGenAdapter</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="arch-box">
+          <div class="arch-label">Memory — memory/</div>
+          <div class="arch-items" style="flex-direction:column;gap:4px">
+            <span class="arch-chip green">ContextEngine (pages)</span>
+            <span class="arch-chip green">ShortTermMemory (Redis)</span>
+            <span class="arch-chip green">VectorStore (Chroma/Qdrant)</span>
+            <span class="arch-chip green">GraphRAGEngine</span>
+            <span class="arch-chip green">SemanticLLMCache</span>
+          </div>
+        </div>
+        <div class="arch-box">
+          <div class="arch-label">Tools — tools/</div>
+          <div class="arch-items" style="flex-direction:column;gap:4px">
+            <span class="arch-chip orange">ToolRegistry</span>
+            <span class="arch-chip orange">MCPToolAdapter</span>
+            <span class="arch-chip orange">SkillRegistry</span>
+            <span class="arch-chip orange">DockerSandbox</span>
+          </div>
+        </div>
+        <div class="arch-box">
+          <div class="arch-label">Observability</div>
+          <div class="arch-items" style="flex-direction:column;gap:4px">
+            <span class="arch-chip purple">TraceRecorder (spans)</span>
+            <span class="arch-chip purple">StepTracer (OTel)</span>
+            <span class="arch-chip purple">MLflowAgentTracer</span>
+            <span class="arch-chip purple">EventBus (SSE)</span>
+            <span class="arch-chip purple">FailureTracker</span>
+            <span class="arch-chip purple">AuditLogger</span>
+          </div>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch-box">
+        <div class="arch-label">Self-Improvement — improvement/</div>
+        <div class="arch-items">
+          <span class="arch-chip red">ErrorCollector</span>
+          <span class="arch-chip red">HermesLoop</span>
+          <span class="arch-chip red">Evaluator</span>
+          <span class="arch-chip red">OnlineLearningMonitor</span>
+        </div>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch-box">
+        <div class="arch-label">Infrastructure</div>
+        <div class="arch-items">
+          <span class="arch-chip">Redis (state + streams)</span>
+          <span class="arch-chip">Vector DB (Chroma/Qdrant/Weaviate)</span>
+          <span class="arch-chip">Graph DB (NetworkX/Neo4j)</span>
+          <span class="arch-chip">MLflow / OTel</span>
+          <span class="arch-chip">Docker (sandbox)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ QUICK START ══════════════════════ -->
+    <section class="section" id="quickstart">
+      <h2>Quick Start</h2>
+
+      <h3>Install</h3>
+      <pre><code class="lang-bash">pip install harnessagent[vector,observe,mcp]
+# Or with all extras:
+pip install harnessagent[all]</code><span class="code-lang">bash</span></pre>
+
+      <h3>Run a single native agent</h3>
+      <pre><code class="lang-python">from harness.core.context import AgentContext
+from harness.agents.sql_agent import SQLAgent
+from harness.memory.manager import MemoryManager
+from harness.llm.router import LLMRouter
+from pathlib import Path
+
+# Build components
+memory = await MemoryManager.create(config)
+llm    = LLMRouter()
+llm.register(anthropic_provider, priority=0)
+
+agent = SQLAgent(
+    llm_router=llm,
+    memory_manager=memory,
+    tool_registry=tool_registry,
+    safety_pipeline=None,
+    step_tracer=None,
+    mlflow_tracer=None,
+    failure_tracker=failure_tracker,
+    audit_logger=audit_logger,
+    event_bus=event_bus,
+    cost_tracker=cost_tracker,
+    checkpoint_manager=checkpoint_manager,
+    trace_recorder=trace_recorder,   # ← new: durable span tree
+)
+
+ctx = AgentContext.create(
+    tenant_id="acme",
+    agent_type="sql",
+    task="List all tables and their row counts",
+    memory=memory,
+    workspace_path=Path("/workspaces/acme/run1"),
+)
+
+result = await agent.run(ctx)
+print(result.output, result.cost_usd, result.steps)</code><span class="code-lang">python</span></pre>
+
+      <h3>Wrap an existing LangGraph agent</h3>
+      <pre><code class="lang-python">import harness
+from langgraph.graph import StateGraph
+
+graph = StateGraph(...)  # your existing graph
+adapter = harness.wrap(graph)
+adapter.attach_harness(
+    safety_pipeline=my_pipeline,
+    cost_tracker=cost_tracker,
+    audit_logger=audit_logger,
+)
+
+async for event in adapter.run_with_harness(ctx, {"input": "analyze sales data"}):
+    print(event.event_type, event.payload)</code><span class="code-lang">python</span></pre>
+
+      <h3>Start the API server</h3>
+      <pre><code class="lang-bash">uvicorn harness.api.main:create_app --factory --host 0.0.0.0 --port 8000
+# Or via Makefile:
+make api</code><span class="code-lang">bash</span></pre>
+    </section>
+
+    <!-- ══════════════════════ CONFIG ══════════════════════ -->
+    <section class="section" id="config">
+      <h2>Configuration</h2>
+      <p>All settings are loaded from environment variables or a <code>.env</code> file via <code>harness.core.config.Settings</code> (Pydantic BaseSettings). Access the singleton via <code>get_config()</code>.</p>
+
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>—</td><td>Anthropic API key (required for Claude models)</td></tr>
+          <tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>OpenAI API key (optional)</td></tr>
+          <tr><td><code>REDIS_URL</code></td><td><code>redis://localhost:6379</code></td><td>Redis connection URL for all state</td></tr>
+          <tr><td><code>VECTOR_BACKEND</code></td><td><code>chroma</code></td><td>Vector store: <code>chroma</code> | <code>qdrant</code> | <code>weaviate</code></td></tr>
+          <tr><td><code>GRAPH_BACKEND</code></td><td><code>networkx</code></td><td>Graph store: <code>networkx</code> | <code>neo4j</code></td></tr>
+          <tr><td><code>EMBEDDING_MODEL</code></td><td><code>all-MiniLM-L6-v2</code></td><td>SentenceTransformer model name</td></tr>
+          <tr><td><code>MLFLOW_TRACKING_URI</code></td><td><code>sqlite:///mlflow.db</code></td><td>MLflow tracking server URI</td></tr>
+          <tr><td><code>OTEL_EXPORTER_ENDPOINT</code></td><td>—</td><td>OTLP gRPC endpoint (optional)</td></tr>
+          <tr><td><code>HERMES_AUTO_APPLY</code></td><td><code>false</code></td><td>Auto-apply Hermes patches without human review</td></tr>
+          <tr><td><code>HERMES_INTERVAL_SECONDS</code></td><td><code>3600</code></td><td>How often Hermes cycle runs (seconds)</td></tr>
+          <tr><td><code>HERMES_MIN_ERRORS_TO_TRIGGER</code></td><td><code>5</code></td><td>Min failures before Hermes generates a patch</td></tr>
+          <tr><td><code>HERMES_PATCH_SCORE_THRESHOLD</code></td><td><code>0.7</code></td><td>Min eval score to apply a patch (0–1)</td></tr>
+          <tr><td><code>JWT_SECRET_KEY</code></td><td>—</td><td>JWT signing secret for API auth</td></tr>
+          <tr><td><code>ENVIRONMENT</code></td><td><code>dev</code></td><td><code>dev</code> | <code>staging</code> | <code>prod</code></td></tr>
+          <tr><td><code>WORKSPACE_BASE_PATH</code></td><td><code>/workspaces</code></td><td>Base path for agent workspaces</td></tr>
+          <tr><td><code>SQL_CONNECTION_STRING</code></td><td>—</td><td>SQLAlchemy connection string for SQL agent</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════ CORE ══════════════════════ -->
+    <section class="section" id="core-context">
+      <h2>Core — Context &amp; Events</h2>
+      <p>Defined in <code>harness/core/context.py</code>. These are the fundamental data objects that flow through every part of the system.</p>
+
+      <h3>AgentContext</h3>
+      <p>Mutable per-run state shared across all components. Created once per run and passed everywhere.</p>
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>run_id</code></td><td>str</td><td>Auto-generated UUID hex, unique per run</td></tr>
+          <tr><td><code>tenant_id</code></td><td>str</td><td>Tenant identifier for multi-tenancy</td></tr>
+          <tr><td><code>agent_type</code></td><td>str</td><td>"sql" | "code" | custom</td></tr>
+          <tr><td><code>task</code></td><td>str</td><td>Natural language task description</td></tr>
+          <tr><td><code>trace_id</code></td><td>str</td><td>UUID hex for distributed trace correlation</td></tr>
+          <tr><td><code>step_count</code></td><td>int</td><td>Current step number (incremented by tick())</td></tr>
+          <tr><td><code>token_count</code></td><td>int</td><td>Cumulative tokens used</td></tr>
+          <tr><td><code>max_steps</code></td><td>int</td><td>Step budget (default 50)</td></tr>
+          <tr><td><code>max_tokens</code></td><td>int</td><td>Token budget (default 100,000)</td></tr>
+          <tr><td><code>timeout_seconds</code></td><td>float</td><td>Wall-clock timeout (default 300 s)</td></tr>
+          <tr><td><code>failed</code></td><td>bool</td><td>Set to True when run fails</td></tr>
+          <tr><td><code>failure_class</code></td><td>str|None</td><td>FailureClass value when failed</td></tr>
+          <tr><td><code>metadata</code></td><td>dict</td><td>Arbitrary caller metadata; also used for HITL manager injection</td></tr>
+        </tbody>
+      </table>
+
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">AgentContext.create(tenant_id, agent_type, task, memory, workspace_path, **opts) → AgentContext</div>
+          <div class="method-desc">Factory method that generates run_id and trace_id automatically.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">ctx.tick(tokens=0) → None</div>
+          <div class="method-desc">Increment step_count and accumulate tokens. Raises BudgetExceeded if any budget limit is exceeded.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">ctx.is_budget_ok() → bool</div>
+          <div class="method-desc">Returns False if step_count ≥ max_steps, token_count ≥ max_tokens, or elapsed_seconds ≥ timeout_seconds.</div>
+        </div>
+      </div>
+
+      <h3>StepEvent</h3>
+      <p>Emitted at each significant moment in an agent run. Published to EventBus (Redis Pub/Sub) for SSE streaming.</p>
+      <table>
+        <thead><tr><th>event_type</th><th>Payload fields</th><th>When emitted</th></tr></thead>
+        <tbody>
+          <tr><td><code>started</code></td><td>task, agent_type</td><td>Run begins</td></tr>
+          <tr><td><code>llm_call</code></td><td>model, provider, input_tokens, output_tokens, cached, tool_calls count</td><td>After each LLM response</td></tr>
+          <tr><td><code>tool_call</code></td><td>tool_id, tool_name, args, is_error, error</td><td>After each tool execution</td></tr>
+          <tr><td><code>token_delta</code></td><td>delta (string chunk)</td><td>During streaming LLM response</td></tr>
+          <tr><td><code>completed</code></td><td>output, elapsed_seconds</td><td>Successful completion</td></tr>
+          <tr><td><code>failed</code></td><td>error, failure_class, elapsed_seconds</td><td>Any fatal error</td></tr>
+          <tr><td><code>budget_exceeded</code></td><td>failure_class</td><td>Step/token/time budget hit</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="core-protocols">
+      <h2>Core — Protocols</h2>
+      <p>Defined in <code>harness/core/protocols.py</code>. Structural Protocol ABCs that all pluggable components must satisfy. Use <code>isinstance(x, LLMProvider)</code> for runtime checking.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="margin-top:0">LLMProvider</h3>
+          <code>provider_name: str</code>, <code>model: str</code><br><br>
+          <div class="method-list">
+            <div class="method"><div class="method-sig">async complete(messages, *, max_tokens, system, tools) → LLMResponse</div></div>
+            <div class="method"><div class="method-sig">async stream(messages, **kwargs) → AsyncIterator[str]</div></div>
+            <div class="method"><div class="method-sig">async health_check() → bool</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">VectorStore</h3>
+          <div class="method-list">
+            <div class="method tool"><div class="method-sig">async upsert(id, text, metadata, embedding) → None</div></div>
+            <div class="method tool"><div class="method-sig">async query(text, k=5, filter, hybrid_alpha) → list[VectorHit]</div></div>
+            <div class="method tool"><div class="method-sig">async delete(id) → None</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">ToolExecutor</h3>
+          <code>name, description, input_schema, timeout_seconds</code><br><br>
+          <div class="method-list">
+            <div class="method tool"><div class="method-sig">async execute(ctx, args) → ToolResult</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">GraphStore</h3>
+          <div class="method-list">
+            <div class="method tool"><div class="method-sig">async add_node(id, type, props) → None</div></div>
+            <div class="method tool"><div class="method-sig">async add_edge(src, tgt, type, props) → None</div></div>
+            <div class="method tool"><div class="method-sig">async traverse(start_ids, max_hops=2) → list[GraphPath]</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="core-errors">
+      <h2>Core — Error Hierarchy</h2>
+      <p>All harness errors extend <code>HarnessError</code> and carry a canonical <code>FailureClass</code> enum value. The failure class drives HTTP status codes, Prometheus labels, and Hermes sampling.</p>
+
+      <table>
+        <thead><tr><th>FailureClass</th><th>Exception</th><th>HTTP Status</th></tr></thead>
+        <tbody>
+          <tr><td><code>LLM_ERROR / LLM_TIMEOUT / LLM_RATE_LIMIT</code></td><td>LLMError</td><td>502 / 504 / 429</td></tr>
+          <tr><td><code>TOOL_NOT_FOUND / TOOL_SCHEMA_ERROR</code></td><td>ToolError</td><td>400</td></tr>
+          <tr><td><code>TOOL_EXEC_ERROR / TOOL_TIMEOUT</code></td><td>ToolError</td><td>500</td></tr>
+          <tr><td><code>MCP_CONNECT_ERROR / MCP_TOOL_ERROR</code></td><td>HarnessError</td><td>502</td></tr>
+          <tr><td><code>SAFETY_INPUT / SAFETY_STEP / SAFETY_OUTPUT</code></td><td>SafetyViolation</td><td>400</td></tr>
+          <tr><td><code>BUDGET_STEPS / BUDGET_TOKENS / BUDGET_TIME</code></td><td>BudgetExceeded</td><td>429</td></tr>
+          <tr><td><code>MEMORY_REDIS / MEMORY_VECTOR / MEMORY_GRAPH</code></td><td>HarnessError</td><td>500</td></tr>
+          <tr><td><code>INTER_AGENT_TIMEOUT / INTER_AGENT_REJECT</code></td><td>HITLRejected</td><td>403</td></tr>
+          <tr><td><code>UNKNOWN</code></td><td>HarnessError</td><td>500</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <p><strong>Using failure classes:</strong> <code>StepFailure.from_exception(exc, run_id, step_number, agent_type)</code> automatically captures the stack trace and classifies the exception into the correct FailureClass.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ AGENTS ══════════════════════ -->
+    <section class="section" id="agent-base">
+      <h2>BaseAgent — Run Lifecycle</h2>
+      <p>Defined in <code>harness/agents/base.py</code>. All concrete agents inherit from BaseAgent. The <code>run(ctx)</code> method orchestrates the full production lifecycle.</p>
+
+      <h3>Constructor Parameters</h3>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>llm_router</code></td><td>LLMRouter</td><td>Yes</td><td>Health-aware, circuit-breaking LLM dispatch</td></tr>
+          <tr><td><code>memory_manager</code></td><td>MemoryManager</td><td>Yes</td><td>Conversation, vector, graph memory</td></tr>
+          <tr><td><code>tool_registry</code></td><td>ToolRegistry</td><td>Yes</td><td>Tool lookup, validation, safety, execution</td></tr>
+          <tr><td><code>safety_pipeline</code></td><td>SafetyPipeline</td><td>No</td><td>Input/output safety checking</td></tr>
+          <tr><td><code>step_tracer</code></td><td>StepTracer</td><td>No</td><td>OpenTelemetry span export</td></tr>
+          <tr><td><code>trace_recorder</code></td><td>TraceRecorder</td><td>No</td><td>Durable span tree in Redis + JSONL</td></tr>
+          <tr><td><code>failure_tracker</code></td><td>FailureTracker</td><td>No</td><td>Failure classification + Hermes signal</td></tr>
+          <tr><td><code>event_bus</code></td><td>EventBus</td><td>No</td><td>Redis Pub/Sub for SSE streaming</td></tr>
+          <tr><td><code>cost_tracker</code></td><td>CostTracker</td><td>No</td><td>Per-call USD cost recording</td></tr>
+          <tr><td><code>checkpoint_manager</code></td><td>CheckpointManager</td><td>No</td><td>Atomic save/restore for crash recovery</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Run loop steps</h3>
+      <ol>
+        <li>Open <code>RUN</code> trace span, emit <code>started</code> event, begin MLflow run</li>
+        <li>Resume from checkpoint if one exists (<code>_maybe_resume_checkpoint</code>)</li>
+        <li><strong>Loop while <code>ctx.is_budget_ok()</code>:</strong>
+          <ol>
+            <li>Fit history to context window (compress if &gt; 40 messages)</li>
+            <li>GraphRAG/vector retrieve — build retrieval context string</li>
+            <li>Build LLM messages + system prompt</li>
+            <li>Open <code>LLM</code> trace span → call LLM → register token usage → close span</li>
+            <li>Open <code>GUARDRAIL</code> span → run safety pipeline → close span</li>
+            <li>If no tool calls → extract final answer → break</li>
+            <li>HITL approval check (sequential)</li>
+            <li>Execute all tool calls in parallel, each in a <code>TOOL</code> span</li>
+            <li>Checkpoint every 10 steps</li>
+          </ol>
+        </li>
+        <li>Close <code>RUN</code> span (OK or ERROR), emit <code>completed</code>/<code>failed</code> event</li>
+        <li>Return <code>AgentResult</code></li>
+      </ol>
+
+      <h3>Methods to override in subclasses</h3>
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">build_system_prompt(ctx: AgentContext) → str</div>
+          <div class="method-desc">Return the system prompt. Default is a generic "complete the task" prompt.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">build_messages(ctx, history, retrieval_context) → list[dict]</div>
+          <div class="method-desc">Assemble the messages list for the LLM call. Override to customize message construction.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">extract_final_answer(history: list[dict]) → str</div>
+          <div class="method-desc">Extract final answer from conversation history. Default returns last assistant message.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="agent-code">
+      <h2>CodeAgent</h2>
+      <p><code>harness/agents/code_agent.py</code> — Specialized for Python code writing, debugging, and iterative improvement.</p>
+      <p><strong>agent_type:</strong> <code>"code"</code></p>
+      <p><strong>Workflow:</strong> Understand → Write clean Python with type hints → Lint with ruff → Run code → Iterate on failures.</p>
+      <p><strong>Default tools:</strong> <code>run_python</code>, <code>lint_code</code>, <code>read_file</code>, <code>write_file</code>, <code>apply_patch</code>, <code>list_workspace</code></p>
+    </section>
+
+    <section class="section" id="agent-sql">
+      <h2>SQLAgent</h2>
+      <p><code>harness/agents/sql_agent.py</code> — Specialized for SQL queries, schema exploration, and data analysis.</p>
+      <p><strong>agent_type:</strong> <code>"sql"</code></p>
+      <p><strong>Schema pre-population:</strong> Before the main loop, <code>_populate_schema(ctx)</code> introspects the database and stores table/column nodes in the knowledge graph. This enables GraphRAG to surface schema context automatically in subsequent queries.</p>
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">async _populate_schema(ctx) → None</div>
+          <div class="method-desc">Calls list_tables and describe_table tools. Stores Table + Column nodes in graph. Caps at 50 tables. Runs once per session.</div>
+        </div>
+      </div>
+      <p><strong>Default tools:</strong> <code>list_tables</code>, <code>describe_table</code>, <code>sample_rows</code>, <code>execute_sql</code></p>
+    </section>
+
+    <section class="section" id="adapters">
+      <h2>Framework Adapters</h2>
+      <p><code>harness/adapters/</code> — Wraps external agent frameworks with the harness production lifecycle.</p>
+      <pre><code class="lang-python">import harness
+
+# Auto-detect from object type
+adapter = harness.wrap(my_langgraph_graph)   # → LangGraphAdapter
+adapter = harness.wrap(my_crew)               # → CrewAIAdapter
+adapter = harness.wrap(my_autogen_agent)      # → AutoGenAdapter
+
+# Inject production components
+adapter.attach_harness(safety_pipeline, cost_tracker, audit_logger)
+adapter.attach_mcp(mcp_client, tool_names=["search", "execute"])</code><span class="code-lang">python</span></pre>
+
+      <table>
+        <thead><tr><th>Adapter</th><th>Detects</th><th>Execution model</th></tr></thead>
+        <tbody>
+          <tr><td><code>LangGraphAdapter</code></td><td>LangGraph StateGraph or CompiledGraph</td><td>astream() — yields events per node execution</td></tr>
+          <tr><td><code>CrewAIAdapter</code></td><td>CrewAI Crew object</td><td>kickoff_async() — yields events per agent turn</td></tr>
+          <tr><td><code>AutoGenAdapter</code></td><td>AutoGen ConversableAgent</td><td>initiate_chat() — yields events per message</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════ MEMORY ══════════════════════ -->
+    <section class="section" id="memory-manager">
+      <h2>MemoryManager</h2>
+      <p><code>harness/memory/manager.py</code> — Unified interface to all memory tiers. Injected into every agent via <code>AgentContext.memory</code>.</p>
+
+      <h3>Memory tiers</h3>
+      <div class="grid-2">
+        <div class="card"><h3 style="margin-top:0;color:var(--accent-2)">Short-term (Redis LIST)</h3><p>Per-run conversation history. LPUSH newest-first. Configurable <code>last_n</code> window.</p></div>
+        <div class="card"><h3 style="margin-top:0;color:var(--accent-2)">Context engine (Redis + Vector)</h3><p>Paged context with semantic cold-page retrieval. Offloads when hot window exceeds 80% capacity.</p></div>
+        <div class="card"><h3 style="margin-top:0;color:var(--accent-5)">Vector store (long-term)</h3><p>PII-redacted text embeddings. Chroma / Qdrant / Weaviate backends. Hybrid search (alpha-blended).</p></div>
+        <div class="card"><h3 style="margin-top:0;color:var(--accent-5)">Knowledge graph</h3><p>RDF-style triples (subject, predicate, object). NetworkX (dev) or Neo4j (prod). Used by GraphRAG.</p></div>
+      </div>
+
+      <h3>Factory</h3>
+      <pre><code class="lang-python">memory = await MemoryManager.create(config, llm_provider=llm)
+# Builds: ShortTermMemory + EmbeddingProvider + VectorStore
+#         + GraphMemory + ContextWindowManager + ContextEngine</code><span class="code-lang">python</span></pre>
+
+      <h3>Key methods</h3>
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">async push_message(run_id, role, content, tokens=0, skill_ns="default", step=0)</div>
+          <div class="method-desc">Feed to both ShortTermMemory and ContextEngine. skill_ns namespaces context by active skill.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async build_context(run_id, query, skill_ns, token_budget) → BuiltContext | ContextWindow</div>
+          <div class="method-desc">Assemble LLM-ready context. Uses ContextEngine (with offload + cold retrieval) when available.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async smart_retrieve(query, ctx) → RetrievalResult</div>
+          <div class="method-desc">GraphRAG-first retrieval with vector fallback. Returns graph_context + vector_context + strategy.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async remember(text, metadata, tenant_id) → str</div>
+          <div class="method-desc">PII-redact and store in vector DB. Returns document ID.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async evaluate_action(run_id, step, goal, llm_content, tool_name, ...) → ActionRecord | None</div>
+          <div class="method-desc">Score LLM+tool action (goal_progress, tool_relevance, confidence). Stored in Redis.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async slice_for_subagent(parent_run_id, child_run_id, task, token_budget) → SubAgentSlice | None</div>
+          <div class="method-desc">Extract task-relevant context slice from parent and inject into child's hot window.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="context-engine">
+      <h2>ContextEngine</h2>
+      <p><code>harness/memory/context_engine.py</code> — Paged, skill-isolated context management with automatic offload and semantic retrieval.</p>
+
+      <div class="callout info">
+        <div class="callout-icon">ℹ</div>
+        <p><strong>Core idea:</strong> The hot window (Redis LIST) holds recent messages per <code>(run_id, skill_ns)</code>. When it exceeds 80% of <code>max_hot_tokens</code>, the oldest ~2 000 tokens are compressed, embedded, and evicted to the vector store as a <em>ContextPage</em>. Before each LLM call, relevant cold pages are semantically retrieved and re-injected as system messages.</p>
+      </div>
+
+      <h3>Offload pipeline</h3>
+      <ol>
+        <li>Check hot window size (O(1) Redis LLEN)</li>
+        <li>If count &lt; <code>_HOT_MAX_MSGS</code> (200), skip</li>
+        <li>Compute hot token usage (scan all raw items)</li>
+        <li>If &lt; 80% of max_hot_tokens, skip</li>
+        <li>Walk from oldest to newest until ~2 000 tokens collected</li>
+        <li>Compress (LLM preferred, extractive fallback)</li>
+        <li>Embed summary → store in vector DB with metadata</li>
+        <li>Store ContextPage in Redis HASH + ZSET (scored by importance)</li>
+        <li>LTRIM hot list to remove offloaded messages</li>
+      </ol>
+
+      <h3>Importance scoring</h3>
+      <p>Cold pages with higher importance are kept longer. Score starts at 0.5 and bumps for:</p>
+      <ul>
+        <li><strong>+0.10</strong> tool messages</li>
+        <li><strong>+0.15</strong> error/failed content</li>
+        <li><strong>+0.08</strong> result/found/success content</li>
+      </ul>
+
+      <h3>Action scoring formula</h3>
+      <pre><code>composite = 0.5 × goal_progress
+          + 0.3 × tool_relevance
+          + 0.2 × confidence
+
+goal_progress  = min(1, keyword_overlap(response, goal) × 2)
+tool_relevance = 0.9 (success + result > 20 chars)
+               | 0.6 (success, no result)
+               | 0.5 (no tool)
+               | 0.1 (error)
+confidence     = 0.6 − 0.08 per hedging phrase
+               + 0.08 per affirming phrase</code><span class="code-lang">formula</span></pre>
+
+      <h3>Key constants</h3>
+      <table>
+        <thead><tr><th>Constant</th><th>Value</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>_PAGE_TOKEN_TARGET</code></td><td>2,000</td><td>Target tokens per offloaded page</td></tr>
+          <tr><td><code>_PAGE_TTL</code></td><td>86,400 s</td><td>24h TTL for cold pages in Redis</td></tr>
+          <tr><td><code>_HOT_MAX_MSGS</code></td><td>200</td><td>Message count that triggers offload check</td></tr>
+          <tr><td><code>_ACTIONS_TTL</code></td><td>86,400 s</td><td>24h TTL for action records</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="graph-rag">
+      <h2>GraphRAG Engine</h2>
+      <p><code>harness/memory/graph_rag.py</code> — Weighted multi-hop graph retrieval with vector bridging. Used by SQLAgent (schema) and any knowledge-intensive workload.</p>
+
+      <h3>Edge weights</h3>
+      <table>
+        <thead><tr><th>Edge type</th><th>Weight</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>joins</code></td><td>1.5</td><td>SQL JOIN relationship between tables</td></tr>
+          <tr><td><code>used_by_query</code></td><td>1.2</td><td>Table used in a past successful query</td></tr>
+          <tr><td><code>references</code></td><td>1.0</td><td>FK reference between tables</td></tr>
+          <tr><td><code>has_column</code></td><td>0.8</td><td>Table → column relationship</td></tr>
+          <tr><td><code>occurred_in</code></td><td>0.6</td><td>Error occurred in query</td></tr>
+          <tr><td>(default)</td><td>0.5</td><td>Generic relationship</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Retrieval strategy (priority order)</h3>
+      <ol>
+        <li>Extract entities from query (regex patterns for table/column names)</li>
+        <li>Find matching graph nodes (<code>find_nodes(entities)</code>)</li>
+        <li>If no anchors found → <strong>vector-to-graph bridging</strong>: embed query, find vector hits, use as graph seeds</li>
+        <li>BFS from anchor nodes, score paths by cumulative edge weight</li>
+        <li>Render top-N paths as compact context: <code>[SCHEMA]</code>, <code>[JOINS]</code>, <code>[PAST QUERIES]</code>, <code>[PAST ERRORS]</code></li>
+        <li>Supplement with raw vector hits if graph coverage is thin</li>
+      </ol>
+    </section>
+
+    <section class="section" id="llm-cache">
+      <h2>Semantic LLM Cache</h2>
+      <p><code>harness/llm/cache.py</code> — Cosine-similarity cache for LLM responses, keyed by message embedding.</p>
+      <table>
+        <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>threshold</code></td><td>0.97</td><td>Cosine similarity threshold for cache hit</td></tr>
+          <tr><td><code>ttl</code></td><td>3600 s</td><td>Cache entry lifetime</td></tr>
+          <tr><td>Redis key</td><td><code>harness:llm_cache:{tenant}:{hash}</code></td><td>HASH per entry</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════ TRACING ══════════════════════ -->
+    <section class="section" id="tracing">
+      <h2>Trace System — Overview</h2>
+      <p>HarnessAgent produces a hierarchical span tree for every agent run. Spans are stored in Redis (48 h TTL) and appended to <code>logs/runs/{run_id}/trace.jsonl</code>.</p>
+
+      <h3>Span hierarchy</h3>
+      <div class="span-tree" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
+        <div class="span-row"><span class="span-kind run">run</span> run:sql_agent &nbsp;<span style="color:var(--muted);font-size:11px">1234ms &bull; root span, entire run</span></div>
+        <div style="padding-left:24px">
+          <div class="span-row"><span class="span-kind llm">llm</span> llm:call &nbsp;<span style="color:var(--muted);font-size:11px">450ms &bull; 1200 tok &bull; $0.002</span></div>
+          <div class="span-row"><span class="span-kind guardrail">guardrail</span> guardrail:output &nbsp;<span style="color:var(--muted);font-size:11px">12ms &bull; passed</span></div>
+          <div class="span-row"><span class="span-kind tool">tool</span> tool:execute_sql &nbsp;<span style="color:var(--muted);font-size:11px">180ms &bull; 42 rows</span></div>
+          <div class="span-row"><span class="span-kind llm">llm</span> llm:call &nbsp;<span style="color:var(--muted);font-size:11px">310ms &bull; 800 tok &bull; $0.001</span></div>
+          <div class="span-row"><span class="span-kind guardrail">guardrail</span> guardrail:output &nbsp;<span style="color:var(--muted);font-size:11px">8ms &bull; passed</span></div>
+        </div>
+      </div>
+      <p>The span stack is tracked automatically per run_id inside <code>TraceRecorder._stacks</code>. Callers never need to pass <code>parent_span_id</code> — it is always the top of the stack.</p>
+    </section>
+
+    <section class="section" id="trace-schema">
+      <h2>TraceSpan Schema</h2>
+      <p><code>harness/observability/trace_schema.py</code></p>
+
+      <table>
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>trace_id</code></td><td>str</td><td>Matches AgentContext.trace_id — shared across all spans in one run tree</td></tr>
+          <tr><td><code>span_id</code></td><td>str</td><td>16 hex chars, unique per span</td></tr>
+          <tr><td><code>parent_span_id</code></td><td>str|None</td><td>None for root span; set automatically by recorder stack</td></tr>
+          <tr><td><code>run_id</code></td><td>str</td><td>AgentContext.run_id</td></tr>
+          <tr><td><code>kind</code></td><td>SpanKind</td><td>RUN | AGENT | LLM | TOOL | GUARDRAIL | MEMORY | HANDOFF | EVAL</td></tr>
+          <tr><td><code>name</code></td><td>str</td><td>e.g. "llm:claude-3-5-sonnet", "tool:execute_sql"</td></tr>
+          <tr><td><code>status</code></td><td>SpanStatus</td><td>RUNNING | OK | ERROR</td></tr>
+          <tr><td><code>start_time</code></td><td>datetime</td><td>UTC timestamp</td></tr>
+          <tr><td><code>end_time</code></td><td>datetime|None</td><td>Null while RUNNING</td></tr>
+          <tr><td><code>duration_ms</code></td><td>float|None</td><td>Wall-clock milliseconds</td></tr>
+          <tr><td><code>input_preview</code></td><td>str</td><td>First 500 chars of input</td></tr>
+          <tr><td><code>output_preview</code></td><td>str</td><td>First 500 chars of output</td></tr>
+          <tr><td><code>error</code></td><td>str|None</td><td>Error message on ERROR status</td></tr>
+          <tr><td><code>input_tokens</code></td><td>int</td><td>LLM input tokens (LLM spans only)</td></tr>
+          <tr><td><code>output_tokens</code></td><td>int</td><td>LLM output tokens (LLM spans only)</td></tr>
+          <tr><td><code>cost_usd</code></td><td>float</td><td>USD cost (LLM spans only)</td></tr>
+          <tr><td><code>cached</code></td><td>bool</td><td>True if response came from cache</td></tr>
+          <tr><td><code>agent_type</code></td><td>str</td><td>Copied from AgentContext</td></tr>
+          <tr><td><code>step</code></td><td>int</td><td>AgentContext.step_count at span open time</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="trace-recorder">
+      <h2>TraceRecorder</h2>
+      <p><code>harness/observability/trace_recorder.py</code></p>
+
+      <h3>Persistence sinks</h3>
+      <table>
+        <thead><tr><th>Sink</th><th>Key</th><th>TTL</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Redis HASH</td><td><code>harness:span:{span_id}</code></td><td>48 h</td><td>Live query by span_id</td></tr>
+          <tr><td>Redis ZSET</td><td><code>harness:trace:{run_id}</code></td><td>48 h</td><td>Span index ordered by start_time</td></tr>
+          <tr><td>JSONL file</td><td><code>logs/runs/{run_id}/trace.jsonl</code></td><td>Forever</td><td>Durable audit trail</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Usage</h3>
+      <pre><code class="lang-python">recorder = TraceRecorder.create(redis_url=cfg.redis_url, log_dir="logs")
+
+# Context manager (recommended)
+async with recorder.span(run_id, SpanKind.TOOL, "tool:execute_sql", ctx,
+                          input_preview=str(args)) as span_id:
+    result = await registry.execute(ctx, call)
+
+# Manual control
+span_id = await recorder.start_span(run_id, SpanKind.LLM, "llm:call", ctx)
+recorder.set_llm_usage(span_id, input_tokens=200, output_tokens=100, cost_usd=0.003)
+await recorder.end_span(run_id, span_id)
+
+# Query
+trace = await recorder.get_trace(run_id)   # → TraceView | None
+span  = await recorder.get_span(span_id)   # → TraceSpan | None</code><span class="code-lang">python</span></pre>
+
+      <div class="callout warn">
+        <div class="callout-icon">⚠</div>
+        <p><strong>set_llm_usage</strong> must be called before the span context manager exits, or before <code>end_span</code>. It registers pending token/cost data that <code>end_span</code> picks up. If not called, token counts default to 0.</p>
+      </div>
+    </section>
+
+    <section class="section" id="metrics">
+      <h2>Metrics &amp; Audit</h2>
+
+      <h3>Prometheus metrics (<code>harness/observability/metrics.py</code>)</h3>
+      <table>
+        <thead><tr><th>Metric</th><th>Type</th><th>Labels</th></tr></thead>
+        <tbody>
+          <tr><td><code>harness_agent_steps_total</code></td><td>Counter</td><td>agent_type, tenant_id, status</td></tr>
+          <tr><td><code>harness_agent_tokens_total</code></td><td>Counter</td><td>agent_type, provider, token_type</td></tr>
+          <tr><td><code>harness_tool_calls_total</code></td><td>Counter</td><td>tool_name, agent_type, status</td></tr>
+          <tr><td><code>harness_safety_blocks_total</code></td><td>Counter</td><td>guard, agent_type, stage</td></tr>
+          <tr><td><code>harness_active_runs</code></td><td>Gauge</td><td>agent_type</td></tr>
+          <tr><td><code>harness_llm_request_duration_seconds</code></td><td>Histogram</td><td>provider, model</td></tr>
+          <tr><td><code>harness_cost_usd_total</code></td><td>Counter</td><td>tenant_id, model</td></tr>
+          <tr><td><code>harness_hermes_patches_total</code></td><td>Counter</td><td>agent_type, status</td></tr>
+        </tbody>
+      </table>
+
+      <h3>AuditLogger (<code>harness/observability/audit.py</code>)</h3>
+      <p>Append-only log for compliance. Writes to <code>{workspace_base}/audit/{tenant_id}/{date}.jsonl</code> and Redis stream <code>harness:audit</code>.</p>
+      <p><strong>Actions tracked:</strong> tool_call, memory_write/read, llm_call, agent_start/complete, hitl_request/resolve, safety_block, patch_apply</p>
+      <p><strong>PII safety:</strong> payloads are SHA-256 hashed before storage — content is never stored, only fingerprints.</p>
+    </section>
+
+    <section class="section" id="event-bus">
+      <h2>Event Bus (SSE)</h2>
+      <p><code>harness/observability/event_bus.py</code> — Redis Pub/Sub channels for real-time streaming via Server-Sent Events.</p>
+      <p>Channel: <code>harness:events:{run_id}</code></p>
+
+      <pre><code class="lang-python"># BaseAgent emits
+await event_bus.publish(StepEvent.llm_called(ctx, response))
+
+# Client subscribes (used by SSE route)
+async for event in event_bus.subscribe(run_id):
+    print(event.event_type, event.payload)
+
+# From the browser:
+const source = new EventSource(`/runs/${runId}/stream`)
+source.onmessage = (e) => console.log(JSON.parse(e.data))</code><span class="code-lang">python / js</span></pre>
+    </section>
+
+    <!-- ══════════════════════ TOOLS ══════════════════════ -->
+    <section class="section" id="tool-registry">
+      <h2>ToolRegistry</h2>
+      <p><code>harness/tools/registry.py</code> — Central tool management with validation, safety, timeout, and audit.</p>
+
+      <h3>Execution pipeline</h3>
+      <ol>
+        <li><strong>Lookup</strong> — find tool by name; raise <code>TOOL_NOT_FOUND</code> if missing</li>
+        <li><strong>Schema validation</strong> — validate args against <code>input_schema</code>; raise <code>TOOL_SCHEMA_ERROR</code> if invalid</li>
+        <li><strong>Safety check</strong> — run through safety_pipeline; raise <code>SAFETY_STEP</code> if blocked</li>
+        <li><strong>Timeout</strong> — wrap execution in <code>asyncio.timeout(tool.timeout_seconds)</code></li>
+        <li><strong>Execute</strong> — call <code>tool.execute(ctx, args)</code></li>
+        <li><strong>Audit log</strong> — record in AuditLogger</li>
+        <li><strong>Metrics</strong> — increment <code>tool_calls_total</code></li>
+      </ol>
+
+      <h3>Built-in tools</h3>
+      <table>
+        <thead><tr><th>Tool name</th><th>Module</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>run_python</code></td><td>code_tools</td><td>Execute Python in DockerSandbox or RestrictedPython</td></tr>
+          <tr><td><code>lint_code</code></td><td>code_tools</td><td>Run ruff linter on code string</td></tr>
+          <tr><td><code>read_file</code></td><td>file_tools</td><td>Read file from workspace (path traversal blocked)</td></tr>
+          <tr><td><code>write_file</code></td><td>file_tools</td><td>Write file to workspace</td></tr>
+          <tr><td><code>list_tables</code></td><td>sql_tools</td><td>List all tables in connected database</td></tr>
+          <tr><td><code>describe_table</code></td><td>sql_tools</td><td>Get column schema and types for a table</td></tr>
+          <tr><td><code>execute_sql</code></td><td>sql_tools</td><td>Execute SELECT query (read-only mode enforced)</td></tr>
+          <tr><td><code>sample_rows</code></td><td>sql_tools</td><td>Get first N rows from a table</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="mcp">
+      <h2>MCP Client</h2>
+      <p><code>harness/tools/mcp_client.py</code> — Connect to any MCP-compatible server (stdio or SSE) and expose its tools in the ToolRegistry.</p>
+
+      <pre><code class="lang-python">from harness.tools.mcp_client import MCPToolAdapter, load_mcp_servers_from_config
+
+# From YAML config
+adapters = load_mcp_servers_from_config("mcp_servers.yaml")
+for adapter in adapters:
+    tools = await adapter.connect()
+    for tool in tools:
+        registry.register(tool)
+
+# Manual
+adapter = MCPToolAdapter(MCPServerConfig(
+    name="search",
+    transport="stdio",
+    command=["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+    env={"BRAVE_API_KEY": "${BRAVE_API_KEY}"},
+))
+tools = await adapter.connect()</code><span class="code-lang">python</span></pre>
+
+      <h3>YAML config format</h3>
+      <pre><code class="lang-yaml">servers:
+  search:
+    transport: stdio
+    command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"]
+    env: {BRAVE_API_KEY: "${BRAVE_API_KEY}"}
+  filesystem:
+    transport: stdio
+    command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/data"]</code><span class="code-lang">yaml</span></pre>
+    </section>
+
+    <section class="section" id="skills">
+      <h2>Skills</h2>
+      <p><code>harness/tools/skills.py</code> — Named, versioned, composable agent capabilities. Skills bundle a system prompt fragment, required tools, and usage examples.</p>
+
+      <pre><code class="lang-python">from harness.tools.skills import Skill, SkillRegistry
+
+registry = SkillRegistry()
+registry.register(Skill(
+    name="sql_analysis",
+    version="1.0.0",
+    description="Analyze SQL databases",
+    system_prompt="You are an expert SQL analyst...",
+    required_tools=["list_tables", "describe_table", "execute_sql"],
+    tags=["sql", "analytics"],
+))
+
+# Compose multiple skills
+combined = registry.compose("sql_analysis", "data_visualization")
+
+# Filter by tag
+analytics_skills = registry.list_for_tags(["analytics"])</code><span class="code-lang">python</span></pre>
+    </section>
+
+    <section class="section" id="sandbox">
+      <h2>Execution Sandbox</h2>
+      <p><code>harness/filesystem/sandbox.py</code> — Isolated code execution. Docker is the primary sandbox; RestrictedPython is the fallback.</p>
+
+      <h3>DockerSandbox security controls</h3>
+      <table>
+        <thead><tr><th>Control</th><th>Setting</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>Memory limit</td><td>256 MiB</td><td>OOM kill if exceeded</td></tr>
+          <tr><td>CPU limit</td><td>1 core</td><td>No runaway CPU consumption</td></tr>
+          <tr><td>Network</td><td>Disabled by default</td><td>No outbound connections</td></tr>
+          <tr><td>User</td><td>nobody</td><td>Non-root execution</td></tr>
+          <tr><td>Privileges</td><td>--no-new-privileges</td><td>Cannot escalate</td></tr>
+          <tr><td>Timeout</td><td>30 s</td><td>Terminated if exceeded</td></tr>
+          <tr><td>Filesystem</td><td>Workspace mount only</td><td>Cannot access host filesystem</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════ ORCHESTRATION ══════════════════════ -->
+    <section class="section" id="runner">
+      <h2>AgentRunner</h2>
+      <p><code>harness/orchestrator/runner.py</code> — Creates, executes, and tracks agent runs. The main component called by API routes.</p>
+
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">async create_run(tenant_id, agent_type, task, metadata) → RunRecord</div>
+          <div class="method-desc">Creates a RunRecord with status="pending", stores in Redis, returns it.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async execute_run(run_id, timeout=300.0) → AgentResult</div>
+          <div class="method-desc">Loads run, builds agent, runs it, updates RunRecord to completed/failed.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async cancel_run(run_id)</div>
+          <div class="method-desc">Sets cancellation flag; running agent loop detects and stops.</div>
+        </div>
+      </div>
+
+      <h3>RunRecord states</h3>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 0">
+        <span class="tag">pending</span>
+        <span style="color:var(--muted)">→</span>
+        <span class="tag green">running</span>
+        <span style="color:var(--muted)">→</span>
+        <span class="tag green">completed</span>
+        <br>
+        <span style="color:var(--muted);margin-left:64px">↘</span>
+        <span class="tag red">failed</span>
+        <span style="color:var(--muted)">&bull;</span>
+        <span class="tag yellow">cancelled</span>
+      </div>
+    </section>
+
+    <section class="section" id="planner">
+      <h2>Planner &amp; Scheduler</h2>
+      <p>Multi-agent DAG decomposition and parallel execution.</p>
+
+      <h3>Planner (<code>harness/orchestrator/planner.py</code>)</h3>
+      <p>Takes a complex task, calls an LLM to decompose it into a JSON array of <code>SubTask</code> objects with dependency declarations. Validates the DAG (cycle detection via Kahn's algorithm).</p>
+
+      <pre><code class="lang-python">planner = Planner(llm_provider=llm)
+plan = await planner.plan(
+    task="Build a sales dashboard: fetch data, analyze it, generate report",
+    available_agents=["sql", "code", "research"],
+)
+# Returns TaskPlan with SubTasks:
+# {id: "fetch", agent_type: "sql",  depends_on: []}
+# {id: "analyze", agent_type: "code", depends_on: ["fetch"]}
+# {id: "report",  agent_type: "code", depends_on: ["analyze"]}</code><span class="code-lang">python</span></pre>
+
+      <h3>Scheduler (<code>harness/orchestrator/scheduler.py</code>)</h3>
+      <p>Executes the plan by repeatedly finding ready tasks (deps satisfied) and running them in parallel with asyncio.gather + semaphore back-pressure.</p>
+      <ul>
+        <li><strong>Parallelism:</strong> <code>max_concurrent=10</code> semaphore</li>
+        <li><strong>Retry:</strong> <code>max_retries=1</code> per subtask, exponential backoff</li>
+        <li><strong>Handoff enrichment:</strong> predecessor outputs injected into dependent task context</li>
+        <li><strong>Failure propagation:</strong> tasks with failed deps are skipped and marked failed</li>
+      </ul>
+    </section>
+
+    <section class="section" id="hitl">
+      <h2>Human-in-the-Loop (HITL)</h2>
+      <p><code>harness/orchestrator/hitl.py</code> — Pause agent execution and wait for human approval before executing sensitive tool calls.</p>
+
+      <pre><code class="lang-python"># In agent context metadata
+ctx.metadata["hitl_manager"] = hitl_manager
+ctx.metadata["policy"] = policy  # policy.requires_hitl(tool_name) → bool
+
+# During tool execution, BaseAgent calls:
+request = await hitl_manager.request_approval(ctx, tool_name, tool_args)
+decision = await hitl_manager.await_decision(request.request_id, timeout=3600.0)
+# "approved" → continue; "rejected"/"expired" → raise HITLRejected</code><span class="code-lang">python</span></pre>
+
+      <p>Pending requests are stored in Redis sorted set <code>harness:hitl:pending</code> and exposed via <code>GET /hitl/pending</code>.</p>
+    </section>
+
+    <section class="section" id="messaging">
+      <h2>Inter-Agent Messaging</h2>
+      <p><code>harness/messaging/bus.py</code> — Redis Streams-based messaging between agents in multi-agent systems.</p>
+
+      <table>
+        <thead><tr><th>Message type</th><th>Direction</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>task</code></td><td>Parent → Child</td><td>Delegate work to child agent</td></tr>
+          <tr><td><code>result</code></td><td>Child → Parent</td><td>Return completed work</td></tr>
+          <tr><td><code>error</code></td><td>Any</td><td>Error notification</td></tr>
+          <tr><td><code>query</code></td><td>Any</td><td>Request information</td></tr>
+          <tr><td><code>status</code></td><td>Any</td><td>Progress update</td></tr>
+          <tr><td><code>heartbeat</code></td><td>Any</td><td>Keep-alive signal</td></tr>
+        </tbody>
+      </table>
+
+      <div class="method-list">
+        <div class="method">
+          <div class="method-sig">async request(recipient_id, message_type, payload, timeout=30.0) → AgentMessage | None</div>
+          <div class="method-desc">Send a message and wait for a correlated reply. Uses correlation_id for matching.</div>
+        </div>
+        <div class="method">
+          <div class="method-sig">async fan_out(recipient_ids, message_type, payload, timeout=30.0) → list[AgentMessage]</div>
+          <div class="method-desc">Send to N agents in parallel, gather all replies within timeout.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ LLM ══════════════════════ -->
+    <section class="section" id="llm-router">
+      <h2>LLM Router</h2>
+      <p><code>harness/llm/router.py</code> — Health-aware, context-window-aware routing across multiple LLM providers with per-provider circuit breaking.</p>
+
+      <h3>Routing algorithm</h3>
+      <ol>
+        <li>Sort registered providers by priority (lower = higher priority)</li>
+        <li>Skip providers where <code>context_window &lt; required_context</code></li>
+        <li>Skip providers with open circuit breakers</li>
+        <li>Try each provider in priority order</li>
+        <li>On retryable error (LLM_RATE_LIMIT, LLM_TIMEOUT, LLM_ERROR): try next provider</li>
+        <li>Return response from first successful provider</li>
+      </ol>
+
+      <h3>Circuit breaker</h3>
+      <table>
+        <thead><tr><th>State</th><th>Behavior</th><th>Transition</th></tr></thead>
+        <tbody>
+          <tr><td>Closed</td><td>Normal operation</td><td>→ Open after N failures</td></tr>
+          <tr><td>Open</td><td>All requests rejected</td><td>→ Half-open after recovery_timeout</td></tr>
+          <tr><td>Half-open</td><td>Test requests allowed</td><td>→ Closed after M successes</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Registering providers</h3>
+      <pre><code class="lang-python">from harness.llm.router import LLMRouter
+from harness.llm.anthropic import AnthropicProvider
+from harness.llm.openai_provider import OpenAIProvider
+
+router = LLMRouter()
+router.register(AnthropicProvider(api_key=cfg.anthropic_api_key),
+                priority=0, context_window=200_000)
+router.register(OpenAIProvider(api_key=cfg.openai_api_key, model="gpt-4o-mini"),
+                priority=10, context_window=128_000)
+# Falls back to OpenAI if Anthropic is unavailable</code><span class="code-lang">python</span></pre>
+    </section>
+
+    <!-- ══════════════════════ SELF-IMPROVEMENT ══════════════════════ -->
+    <section class="section" id="hermes">
+      <h2>Hermes — Self-Improvement Loop</h2>
+      <p>Hermes is the self-healing system that automatically detects failure patterns, generates prompt patches, evaluates them, and optionally applies them — with regression detection and auto-rollback.</p>
+
+      <div class="arch-box" style="margin-bottom:8px">
+        <div class="arch-label">Hermes cycle (runs every hermes_interval_seconds)</div>
+        <div style="font-size:13px;color:var(--muted);line-height:2">
+          1. Check pending rollback from last auto-apply<br>
+          2. Count failures in rolling window → skip if &lt; min_errors<br>
+          3. Sample representative failures (semantic search)<br>
+          4. LLM generates prompt patch proposal<br>
+          5. Evaluator replays failing tasks with patched config → composite score<br>
+          6. If score ≥ threshold AND auto_apply: apply patch via PromptStore<br>
+          7. Schedule rollback check for next cycle<br>
+          8. Log metrics to MLflow + Prometheus
+        </div>
+      </div>
+
+      <h3>Scoring formula</h3>
+      <pre><code>score = success_rate
+      − 0.01 × avg_steps_delta
+      − 0.001 × avg_tokens_delta</code><span class="code-lang">formula</span></pre>
+
+      <h3>Regression detection (OnlineLearningMonitor)</h3>
+      <p>After every run, metrics are recorded per prompt version. If the post-patch error count exceeds <code>baseline × (1 + regression_threshold)</code>, the patch is automatically rolled back to the previous version.</p>
+
+      <table>
+        <thead><tr><th>Config key</th><th>Default</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>HERMES_AUTO_APPLY</code></td><td>false</td><td>Apply patches without human review</td></tr>
+          <tr><td><code>HERMES_INTERVAL_SECONDS</code></td><td>3600</td><td>Time between Hermes cycles</td></tr>
+          <tr><td><code>HERMES_MIN_ERRORS_TO_TRIGGER</code></td><td>5</td><td>Min failures to generate a patch</td></tr>
+          <tr><td><code>HERMES_PATCH_SCORE_THRESHOLD</code></td><td>0.7</td><td>Min score to apply patch</td></tr>
+          <tr><td><code>regression_threshold</code></td><td>0.30</td><td>30% error rate increase triggers rollback</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="eval">
+      <h2>Evaluation Framework</h2>
+      <p><code>harness/eval/runner.py</code> and <code>harness/eval/diagnostics.py</code></p>
+
+      <pre><code class="lang-python">from harness.eval.runner import EvalRunner
+from harness.eval.datasets import EvalDataset, EvalCase
+
+dataset = EvalDataset(
+    name="sql_smoke",
+    agent_type="sql",
+    cases=[
+        EvalCase(case_id="c1", task="List all tables", expected_output="users, orders, products"),
+        EvalCase(case_id="c2", task="Count users", expected_output="42"),
+    ],
+)
+
+runner = EvalRunner(agent_runner=agent_runner)
+report = await runner.run(dataset, concurrency=3)
+print(report.success_rate, report.avg_cost_usd)
+print(report.to_markdown())</code><span class="code-lang">python</span></pre>
+
+      <h3>EvalDiagnostics</h3>
+      <p>Each <code>EvalReport</code> includes rich per-case diagnostics:</p>
+      <ul>
+        <li><strong>failure_stage</strong> — where the agent failed: <code>llm | tool | safety | timeout | budget | quality</code></li>
+        <li><strong>Recommendations</strong> — auto-generated hints based on failure patterns</li>
+        <li><strong>By-agent aggregates</strong> — token usage, cost, tool errors, guardrail hits per agent type</li>
+      </ul>
+    </section>
+
+    <!-- ══════════════════════ API REFERENCE ══════════════════════ -->
+    <section class="section" id="api-reference">
+      <h2>REST API Reference</h2>
+
+      <h3>Runs</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag green">POST</span></td><td><code>/runs</code></td><td>Create and enqueue a run. Body: <code>{agent_type, task, metadata}</code></td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/runs/{run_id}</code></td><td>Retrieve run record by ID</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/runs</code></td><td>List runs for tenant. Query: <code>limit, offset</code></td></tr>
+          <tr><td><span class="tag red">DELETE</span></td><td><code>/runs/{run_id}</code></td><td>Cancel a pending or running run</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/runs/{run_id}/stream</code></td><td>SSE stream of StepEvents. Terminates on completed/failed</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Traces</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/runs/{run_id}/trace</code></td><td>Full span hierarchy. Returns <code>TraceView</code> with aggregated totals. 404 if expired (48 h TTL)</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/runs/spans/{span_id}</code></td><td>Single span by ID. 404 if not found or expired</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Evaluations</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag green">POST</span></td><td><code>/evals/smoke/run</code></td><td>Run single-agent smoke suite</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/evals/multi/run</code></td><td>Run multi-agent regression suite</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/evals/compare</code></td><td>Compare two prompt versions</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Improvement</h3>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/improvement/patches</code></td><td>List patches by status (pending/applied/rejected)</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/improvement/patches/{id}/approve</code></td><td>Approve and apply a patch</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/improvement/patches/{id}/reject</code></td><td>Reject a patch</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/improvement/errors</code></td><td>List recent agent failures</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Authentication</h3>
+      <p>Pass an API key in the <code>X-API-Key</code> header. In <code>dev</code> mode, anonymous requests default to tenant <code>"default"</code>. JWT bearer tokens are also supported.</p>
+
+      <h3>Run response schema</h3>
+      <pre><code class="lang-json">{
+  "run_id":       "3f2a8c1e4d...",
+  "tenant_id":    "acme",
+  "agent_type":   "sql",
+  "task":         "List all tables",
+  "status":       "completed",
+  "created_at":   "2024-01-01T00:00:00Z",
+  "completed_at": "2024-01-01T00:00:12Z",
+  "result": {
+    "output":          "Found 7 tables: users, orders...",
+    "steps":           4,
+    "tokens":          1250,
+    "cost_usd":        0.00031,
+    "success":         true,
+    "elapsed_seconds": 11.8
+  }
+}</code><span class="code-lang">json</span></pre>
+
+      <h3>Trace response schema</h3>
+      <pre><code class="lang-json">{
+  "trace_id":             "ddda858ebe8f...",
+  "run_id":               "3f2a8c1e4d...",
+  "agent_type":           "sql",
+  "status":               "ok",
+  "duration_ms":          11840,
+  "total_input_tokens":   980,
+  "total_output_tokens":  270,
+  "total_cost_usd":       0.00031,
+  "span_count":           6,
+  "spans": [
+    {
+      "span_id":        "01f04e9413851d7f",
+      "parent_span_id": null,
+      "kind":           "run",
+      "name":           "run:sql",
+      "status":         "ok",
+      "duration_ms":    11840,
+      "input_preview":  "List all tables",
+      "output_preview": "Found 7 tables..."
+    },
+    ...
+  ]
+}</code><span class="code-lang">json</span></pre>
+    </section>
+
+    <!-- ══════════════════════ REDIS SCHEMA ══════════════════════ -->
+    <section class="section" id="redis-schema">
+      <h2>Redis Schema</h2>
+      <table>
+        <thead><tr><th>Key pattern</th><th>Type</th><th>TTL</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>harness:run:{run_id}</code></td><td>HASH</td><td>—</td><td>RunRecord (persistent)</td></tr>
+          <tr><td><code>harness:conv:{run_id}</code></td><td>LIST</td><td>—</td><td>Conversation history (ShortTermMemory, LPUSH)</td></tr>
+          <tr><td><code>harness:scratch:{run_id}</code></td><td>HASH</td><td>3600 s</td><td>Scratch pad values</td></tr>
+          <tr><td><code>harness:hot:{run_id}:{skill_ns}</code></td><td>LIST</td><td>—</td><td>Hot window messages per skill (ContextEngine)</td></tr>
+          <tr><td><code>harness:page:{page_id}</code></td><td>HASH</td><td>24 h</td><td>Compressed ContextPage</td></tr>
+          <tr><td><code>harness:pages:{run_id}:{skill_ns}</code></td><td>ZSET</td><td>24 h</td><td>Page IDs scored by importance</td></tr>
+          <tr><td><code>harness:actions:{run_id}</code></td><td>LIST</td><td>24 h</td><td>ActionRecord entries (ContextEngine)</td></tr>
+          <tr><td><code>harness:span:{span_id}</code></td><td>HASH</td><td>48 h</td><td>TraceSpan data</td></tr>
+          <tr><td><code>harness:trace:{run_id}</code></td><td>ZSET</td><td>48 h</td><td>Span IDs ordered by start_time</td></tr>
+          <tr><td><code>harness:error:{record_id}</code></td><td>HASH</td><td>—</td><td>ErrorRecord (Hermes input)</td></tr>
+          <tr><td><code>harness:error_index</code></td><td>ZSET</td><td>—</td><td>Error IDs by timestamp</td></tr>
+          <tr><td><code>harness:hitl:{request_id}</code></td><td>HASH</td><td>3600 s</td><td>ApprovalRequest</td></tr>
+          <tr><td><code>harness:hitl:pending</code></td><td>ZSET</td><td>—</td><td>Pending approval request IDs</td></tr>
+          <tr><td><code>harness:stream:{agent_id}</code></td><td>STREAM</td><td>—</td><td>Per-agent message stream</td></tr>
+          <tr><td><code>harness:stream:broadcast</code></td><td>STREAM</td><td>—</td><td>Broadcast message stream</td></tr>
+          <tr><td><code>harness:events:{run_id}</code></td><td>Pub/Sub</td><td>—</td><td>SSE event channel (EventBus)</td></tr>
+          <tr><td><code>harness:llm_cache:{tenant}:{hash}</code></td><td>HASH</td><td>3600 s</td><td>Cached LLM response</td></tr>
+          <tr><td><code>harness:audit</code></td><td>STREAM</td><td>—</td><td>Audit event stream</td></tr>
+          <tr><td><code>harness:failures</code></td><td>STREAM</td><td>—</td><td>StepFailure stream (FailureTracker)</td></tr>
+          <tr><td><code>harness:online_metrics:{agent}:{version}</code></td><td>HASH</td><td>—</td><td>VersionMetrics (OnlineLearningMonitor)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════ DEPENDENCIES ══════════════════════ -->
+    <section class="section" id="dependencies">
+      <h2>Dependencies</h2>
+
+      <h3>Core (always installed)</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+        <span class="tag">fastapi ≥0.115</span><span class="tag">pydantic ≥2.9</span>
+        <span class="tag">redis ≥5.2</span><span class="tag">anthropic ≥0.40</span>
+        <span class="tag">openai ≥1.50</span><span class="tag">httpx ≥0.28</span>
+        <span class="tag">networkx ≥3.3</span><span class="tag">sqlalchemy ≥2.0</span>
+        <span class="tag">uvicorn</span><span class="tag">rq ≥2.0</span>
+        <span class="tag">apscheduler ≥3.10</span><span class="tag">sse-starlette ≥2.1</span>
+      </div>
+
+      <h3>Optional extras</h3>
+      <table>
+        <thead><tr><th>Extra</th><th>Packages</th><th>Enables</th></tr></thead>
+        <tbody>
+          <tr><td><code>[vector]</code></td><td>chromadb, qdrant-client, weaviate-client, sentence-transformers</td><td>Vector memory backends + embeddings</td></tr>
+          <tr><td><code>[graph]</code></td><td>neo4j</td><td>Neo4j production graph backend</td></tr>
+          <tr><td><code>[observe]</code></td><td>mlflow, opentelemetry-sdk, opentelemetry-exporter-otlp, prometheus-client</td><td>MLflow tracking, OTel export, Prometheus metrics</td></tr>
+          <tr><td><code>[mcp]</code></td><td>mcp ≥1.2</td><td>MCP server connections</td></tr>
+          <tr><td><code>[sql]</code></td><td>asyncpg, sqlglot</td><td>PostgreSQL async driver + SQL parsing</td></tr>
+          <tr><td><code>[ingestion]</code></td><td>pymupdf, trafilatura, python-docx</td><td>PDF/HTML/DOCX document ingestion</td></tr>
+          <tr><td><code>[structured]</code></td><td>instructor</td><td>Structured LLM output (Pydantic models)</td></tr>
+          <tr><td><code>[all]</code></td><td>All of the above</td><td>Full production stack</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout success">
+        <div class="callout-icon">✓</div>
+        <p><strong>Development setup:</strong> <code>pip install harnessagent[vector,observe,mcp]</code> covers the most common production use case. Use NetworkX (default graph backend) for local development; switch to Neo4j for production graph workloads.</p>
+      </div>
+    </section>
+
+    <div style="margin-top:64px;padding-top:32px;border-top:1px solid var(--border);color:var(--muted);font-size:12px">
+      HarnessAgent Technical Documentation &bull; v0.1.0 &bull; Built 2026
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Scrollspy ────────────────────────────────────────────
+  const sections = document.querySelectorAll(".section[id]");
+  const navItems = document.querySelectorAll(".nav-item");
+  const currentSection = document.getElementById("current-section");
+
+  function getActiveSection() {
+    const scrollY = document.getElementById("main").scrollTop + 90;
+    let active = null;
+    for (const section of sections) {
+      if (section.offsetTop <= scrollY) active = section;
+    }
+    return active;
+  }
+
+  function updateNav() {
+    const active = getActiveSection();
+    if (!active) return;
+    navItems.forEach(item => {
+      const isActive = item.getAttribute("href") === "#" + active.id;
+      item.classList.toggle("active", isActive);
+    });
+    const label = document.querySelector(`[href="#${active.id}"]`)?.textContent.trim() || "";
+    currentSection.textContent = label.replace(/[↗▸]/, "").trim();
+  }
+
+  document.getElementById("main").addEventListener("scroll", updateNav, { passive: true });
+  updateNav();
+
+  // ── Search / filter nav ──────────────────────────────────
+  const searchInput = document.getElementById("search-input");
+  searchInput.addEventListener("input", function() {
+    const q = this.value.toLowerCase();
+    navItems.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = (!q || text.includes(q)) ? "" : "none";
+    });
+  });
+
+  // ── Nav click → update topbar ────────────────────────────
+  navItems.forEach(item => {
+    item.addEventListener("click", function() {
+      const label = this.textContent.trim().replace(/[↗▸]/, "").trim();
+      currentSection.textContent = label;
+    });
+  });
+</script>
+</body>
+</html>

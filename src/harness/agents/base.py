@@ -27,6 +27,8 @@ from harness.core.errors import (
     SafetyViolation,
     ToolError,
 )
+from harness.observability.failures import StepFailure
+from harness.observability.trace_schema import SpanKind, SpanStatus
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,7 @@ class BaseAgent:
         message_bus: Any | None = None,
         online_monitor: Any | None = None,
         prompt_manager: Any | None = None,
+        trace_recorder: Any | None = None,
     ) -> None:
         self._llm_router = llm_router
         self._memory = memory_manager
@@ -121,6 +124,7 @@ class BaseAgent:
         self._message_bus = message_bus
         self._online_monitor = online_monitor
         self._prompt_manager = prompt_manager
+        self._trace_recorder = trace_recorder
 
     # ------------------------------------------------------------------
     # Main run loop
@@ -145,6 +149,12 @@ class BaseAgent:
                 metrics.active_runs.labels(agent_type=self.agent_type).inc()
             except Exception:
                 pass
+
+        # Open root RUN span (no-op when trace_recorder is None)
+        run_span_id = await self._start_trace_span(
+            ctx, SpanKind.RUN, f"run:{self.agent_type}",
+            input_preview=ctx.task[:500],
+        )
 
         async with self._mlflow_context(ctx):
             try:
@@ -176,32 +186,42 @@ class BaseAgent:
                     system_prompt = self.build_system_prompt(ctx)
 
                     # 3d. LLM call with OTel span
-                    async with self._llm_span(ctx):
+                    async with self._llm_span(ctx) as llm_span_id:
                         response = await self._call_llm(ctx, messages, system_prompt)
 
-                    # 3e-f. Record token usage
-                    total_tokens = response.input_tokens + response.output_tokens
-                    ctx.tick(tokens=total_tokens)
-                    if response.cached:
-                        cache_hits += 1
-                        cache_read_tokens += response.input_tokens
+                        # 3e-f. Record token usage
+                        total_tokens = response.input_tokens + response.output_tokens
+                        ctx.tick(tokens=total_tokens)
+                        if response.cached:
+                            cache_hits += 1
+                            cache_read_tokens += response.input_tokens
 
-                    # 3g. Cost tracking
-                    if self._cost_tracker is not None:
-                        try:
-                            run_cost = await self._cost_tracker.record(
-                                run_id=ctx.run_id,
-                                tenant_id=ctx.tenant_id,
-                                model=response.model,
+                        # 3g. Cost tracking
+                        call_cost_usd = 0.0
+                        if self._cost_tracker is not None:
+                            try:
+                                run_cost = await self._cost_tracker.record(
+                                    run_id=ctx.run_id,
+                                    tenant_id=ctx.tenant_id,
+                                    model=response.model,
+                                    input_tokens=response.input_tokens,
+                                    output_tokens=response.output_tokens,
+                                )
+                                call_cost_usd = float(run_cost.cost_usd)
+                                total_cost_usd += call_cost_usd
+                            except Exception as exc:
+                                logger.warning("Cost tracking failed: %s", exc)
+
+                        # 3h. MLflow LLM span + annotate trace span with token counts
+                        await self._log_llm_span(ctx, response)
+                        if self._trace_recorder is not None and llm_span_id is not None:
+                            self._trace_recorder.set_llm_usage(
+                                llm_span_id,
                                 input_tokens=response.input_tokens,
                                 output_tokens=response.output_tokens,
+                                cost_usd=call_cost_usd,
+                                cached=response.cached,
                             )
-                            total_cost_usd += run_cost.cost_usd
-                        except Exception as exc:
-                            logger.warning("Cost tracking failed: %s", exc)
-
-                    # 3h. MLflow LLM span
-                    await self._log_llm_span(ctx, response)
 
                     # 3i. Emit llm_called event
                     await self._emit_event(StepEvent.llm_called(ctx, response))
@@ -219,22 +239,37 @@ class BaseAgent:
                         "response_preview": response.content[:300] if response.content else "",
                     })
 
-                    # 3j. Safety check on output
+                    # 3j. Safety check on output — wrapped in GUARDRAIL span
                     if self._safety_pipeline is not None:
+                        _gs_id = await self._start_trace_span(
+                            ctx, SpanKind.GUARDRAIL, "guardrail:output",
+                            input_preview=response.content[:300],
+                        )
+                        _guard_blocked = False
                         try:
                             guard = await _safe_call(
                                 self._safety_pipeline.check_output,
                                 {"content": response.content},
                             )
                             if guard is not None and getattr(guard, "blocked", False):
+                                _guard_blocked = True
                                 raise SafetyViolation(
                                     f"Output blocked by safety pipeline: {getattr(guard, 'reason', '')}",
                                     guard_source="output_guard",
                                     failure_class=FailureClass.SAFETY_OUTPUT,
                                 )
+                            await self._end_trace_span(
+                                ctx, _gs_id, SpanStatus.OK,
+                                output_preview="passed",
+                            )
                         except SafetyViolation:
+                            await self._end_trace_span(
+                                ctx, _gs_id, SpanStatus.ERROR,
+                                error="blocked",
+                            )
                             raise
                         except Exception as exc:
+                            await self._end_trace_span(ctx, _gs_id, SpanStatus.OK)
                             logger.debug("Safety output check raised: %s", exc)
 
                     # Add assistant message to history
@@ -265,12 +300,25 @@ class BaseAgent:
                     for call in response.tool_calls:
                         await self._check_hitl(ctx, call)
 
-                    # Execute all approved tool calls in parallel
+                    # Execute all approved tool calls in parallel — each in a TOOL span
                     async def _execute_one(call: Any) -> ToolResult:
+                        _ts_id = await self._start_trace_span(
+                            ctx, SpanKind.TOOL, f"tool:{call.name}",
+                            input_preview=str(call.args)[:300],
+                        )
                         try:
-                            return await self._tool_registry.execute(ctx, call)
+                            result = await self._tool_registry.execute(ctx, call)
+                            await self._end_trace_span(
+                                ctx, _ts_id, SpanStatus.OK,
+                                output_preview=str(result.data)[:300] if result.data else "",
+                                error=result.error,
+                            )
+                            return result
                         except ToolError as exc:
                             logger.warning("Tool '%s' failed: %s", call.name, exc)
+                            await self._end_trace_span(
+                                ctx, _ts_id, SpanStatus.ERROR, error=str(exc)
+                            )
                             return ToolResult(
                                 data=None,
                                 error=str(exc),
@@ -278,6 +326,9 @@ class BaseAgent:
                             )
                         except SafetyViolation as exc:
                             logger.warning("Tool '%s' blocked: %s", call.name, exc)
+                            await self._end_trace_span(
+                                ctx, _ts_id, SpanStatus.ERROR, error=f"blocked: {exc}"
+                            )
                             return ToolResult(
                                 data=None,
                                 error=f"Blocked by safety policy: {exc}",
@@ -448,6 +499,14 @@ class BaseAgent:
                     "elapsed_seconds": round(elapsed, 2),
                     "output_preview": output[:300] if output else "",
                 })
+
+                # Close root RUN span
+                await self._end_trace_span(
+                    ctx, run_span_id,
+                    status=SpanStatus.ERROR if ctx.failed else SpanStatus.OK,
+                    output_preview=output[:500] if output else "",
+                    error=ctx.failure_class if ctx.failed else None,
+                )
 
                 # 8. Decrement active_runs gauge
                 if metrics is not None:
@@ -866,15 +925,14 @@ class BaseAgent:
         if self._failure_tracker is None:
             return
         try:
-            failure_class = self._classify_exception(exc)
-            await _safe_call(
-                self._failure_tracker.record,
+            failure = StepFailure.from_exception(
+                exc,
                 run_id=ctx.run_id,
                 step_number=ctx.step_count,
-                failure_class=failure_class,
-                message=str(exc),
                 agent_type=self.agent_type,
+                failure_class=self._classify_exception(exc),
             )
+            await _safe_call(self._failure_tracker.record, failure)
         except Exception as track_exc:
             logger.debug("failure_tracker.record failed: %s", track_exc)
 
@@ -933,19 +991,69 @@ class BaseAgent:
 
     @asynccontextmanager
     async def _llm_span(self, ctx: AgentContext):  # type: ignore[return]
-        """Open an OTel span for the LLM call."""
-        if self._step_tracer is not None:
-            try:
-                async with self._step_tracer.span(
-                    name="llm_call",
-                    run_id=ctx.run_id,
-                    trace_id=ctx.trace_id,
-                ) as span:
-                    yield span
-                    return
-            except Exception as exc:
-                logger.debug("StepTracer.span failed: %s", exc)
-        yield None
+        """Open an OTel span + TraceRecorder LLM span for the LLM call."""
+        # TraceRecorder span (durable)
+        llm_span_id = await self._start_trace_span(
+            ctx, SpanKind.LLM, "llm:call",
+        )
+        try:
+            # OTel span (live export)
+            if self._step_tracer is not None:
+                try:
+                    with self._step_tracer.span("llm_call", ctx):
+                        yield llm_span_id
+                        return
+                except Exception as exc:
+                    logger.debug("StepTracer.span failed: %s", exc)
+            yield llm_span_id
+        finally:
+            await self._end_trace_span(ctx, llm_span_id)
+
+    # ------------------------------------------------------------------
+    # TraceRecorder helpers — no-op when recorder is None
+    # ------------------------------------------------------------------
+
+    async def _start_trace_span(
+        self,
+        ctx: AgentContext,
+        kind: SpanKind,
+        name: str,
+        input_preview: str = "",
+    ) -> str | None:
+        if self._trace_recorder is None:
+            return None
+        try:
+            return await self._trace_recorder.start_span(
+                run_id=ctx.run_id,
+                kind=kind,
+                name=name,
+                ctx=ctx,
+                input_preview=input_preview,
+            )
+        except Exception as exc:
+            logger.debug("TraceRecorder.start_span failed: %s", exc)
+            return None
+
+    async def _end_trace_span(
+        self,
+        ctx: AgentContext,
+        span_id: str | None,
+        status: SpanStatus = SpanStatus.OK,
+        output_preview: str = "",
+        error: str | None = None,
+    ) -> None:
+        if self._trace_recorder is None or span_id is None:
+            return
+        try:
+            await self._trace_recorder.end_span(
+                run_id=ctx.run_id,
+                span_id=span_id,
+                status=status,
+                output_preview=output_preview,
+                error=error,
+            )
+        except Exception as exc:
+            logger.debug("TraceRecorder.end_span failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
